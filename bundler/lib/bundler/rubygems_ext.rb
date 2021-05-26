@@ -189,6 +189,10 @@ module Gem
       def match_spec?(spec)
         match_gem?(spec.platform, spec.name)
       end
+
+      def match_gem?(platform, gem_name)
+        match_platforms?(platform, Gem.platforms)
+      end
     end
   end
 
