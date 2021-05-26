@@ -1907,13 +1907,6 @@ class Gem::Specification < Gem::BasicSpecification
     @full_name ||= super
   end
 
-  ##
-  # Work around bundler removing my methods
-
-  def gem_dir # :nodoc:
-    super
-  end
-
   def gems_dir
     @gems_dir ||= File.join(base_dir, "gems")
   end
