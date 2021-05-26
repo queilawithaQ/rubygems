@@ -193,6 +193,16 @@ module Gem
       def match_gem?(platform, gem_name)
         match_platforms?(platform, Gem.platforms)
       end
+
+      private
+
+      def match_platforms?(platform, platforms)
+        platforms.any? do |local_platform|
+          platform.nil? or
+            local_platform == platform or
+            (local_platform != Gem::Platform::RUBY and local_platform =~ platform)
+        end
+      end
     end
   end
 
