@@ -174,12 +174,22 @@ module Gem
     end
   end
 
+  require "rubygems/platform"
+
   class Platform
     JAVA  = Gem::Platform.new("java") unless defined?(JAVA)
     MSWIN = Gem::Platform.new("mswin32") unless defined?(MSWIN)
     MSWIN64 = Gem::Platform.new("mswin64") unless defined?(MSWIN64)
     MINGW = Gem::Platform.new("x86-mingw32") unless defined?(MINGW)
     X64_MINGW = Gem::Platform.new("x64-mingw32") unless defined?(X64_MINGW)
+  end
+
+  Platform.singleton_class.module_eval do
+    unless Platform.singleton_methods.include?(:match_spec?)
+      def match_spec?(spec)
+        match_gem?(spec.platform, spec.name)
+      end
+    end
   end
 
   require "rubygems/util"
