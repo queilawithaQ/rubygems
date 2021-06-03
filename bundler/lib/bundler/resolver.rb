@@ -17,14 +17,14 @@ module Bundler
     # ==== Returns
     # <GemBundle>,nil:: If the list of dependencies can be resolved, a
     #   collection of gemspecs is returned. Otherwise, nil is returned.
-    def self.resolve(requirements, source_requirements = {}, base = [], gem_version_promoter = GemVersionPromoter.new, additional_base_requirements = [], platforms = nil)
+    def self.resolve(requirements, source_requirements = {}, base = [], gem_version_promoter = GemVersionPromoter.new, platforms = nil)
       base = SpecSet.new(base) unless base.is_a?(SpecSet)
-      resolver = new(source_requirements, base, gem_version_promoter, additional_base_requirements, platforms)
+      resolver = new(source_requirements, base, gem_version_promoter, platforms)
       result = resolver.start(requirements)
       SpecSet.new(result).for(requirements.reject{|dep| dep.name.end_with?("\0") })
     end
 
-    def initialize(source_requirements, base, gem_version_promoter, additional_base_requirements, platforms)
+    def initialize(source_requirements, base, gem_version_promoter, platforms)
       @source_requirements = source_requirements
       @base = base
       @resolver = Molinillo::Resolver.new(self, self)
@@ -34,7 +34,6 @@ module Bundler
         dep = Dependency.new(ls.name, ls.version)
         @base_dg.add_vertex(ls.name, DepProxy.get_proxy(dep, ls.platform), true)
       end
-      additional_base_requirements.each {|d| @base_dg.add_vertex(d.name, d) }
       @platforms = platforms.reject {|p| p != Gem::Platform::RUBY && (platforms - [p]).any? {|pl| generic(pl) == p } }
       @resolving_only_for_ruby = platforms == [Gem::Platform::RUBY]
       @gem_version_promoter = gem_version_promoter

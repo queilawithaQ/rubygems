@@ -27,8 +27,7 @@ module Spec
       end
       args[0] ||= [] # base
       args[1] ||= Bundler::GemVersionPromoter.new # gem_version_promoter
-      args[2] ||= [] # additional_base_requirements
-      args[3] ||= @platforms # platforms
+      args[2] ||= @platforms # platforms
       Bundler::Resolver.resolve(deps, source_requirements, *args)
     end
 
