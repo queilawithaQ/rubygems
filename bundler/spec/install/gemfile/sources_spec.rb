@@ -1294,7 +1294,7 @@ RSpec.describe "bundle install with gems on multiple sources" do
             mime-types (3.3.1)
 
         PLATFORMS
-          ruby
+          #{specific_local_platform}
 
         DEPENDENCIES
           capybara (~> 2.5.0)
@@ -1318,7 +1318,7 @@ RSpec.describe "bundle install with gems on multiple sources" do
             mime-types (3.0.0)
 
         PLATFORMS
-          ruby
+          #{specific_local_platform}
 
         DEPENDENCIES
           capybara (~> 2.5.0)
