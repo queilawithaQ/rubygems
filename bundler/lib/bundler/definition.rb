@@ -925,10 +925,10 @@ module Bundler
         next requirements if excluded_names.include?(name)
         dependency = dependencies_by_name[name]
         next requirements unless dependency
-        next requirements if @locked_gems.dependencies[name] != dependency
+        next requirements if @locked_gems.dependencies[name] != dependency.dep
         next requirements if dependency.source.is_a?(Source::Path)
         dep = Gem::Dependency.new(name, ">= #{locked_spec.version}")
-        requirements.map{|d| d.dep == dependency ? DepProxy.get_proxy(dependency.merge(dep), d.__platform) : d }
+        requirements.map{|d| d == dependency ? DepProxy.get_proxy(dependency.merge(dep), d.__platform) : d }
       end
     end
 
