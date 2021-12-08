@@ -32,8 +32,10 @@ class GemTest < Gem::TestCase
     FileUtils.mkdir_p dir_lib_rubygems_defaults_arg
 
     operating_system_rb = File.join dir_lib_rubygems_defaults_arg, "operating_system.rb"
-
     File.open(operating_system_rb, 'w') {|f| f.write content }
+
+    implementation_rb = File.join dir_lib_rubygems_defaults_arg, "#{RUBY_ENGINE}.rb"
+    File.open(implementation_rb, 'w') {|f| f.write "require_relative 'operating_system'" }
 
     File.join dir_lib_arg, "lib"
   end
