@@ -1,18 +1,16 @@
-# frozen_string_literal: true
 require 'rubygems/command'
-require 'rubygems/package'
+require 'rubygems/format'
 require 'rubygems/installer'
 require 'rubygems/version_option'
 
 class Gem::Commands::PristineCommand < Gem::Command
+
   include Gem::VersionOption
 
   def initialize
     super 'pristine',
           'Restores installed gems to pristine condition from files located in the gem cache',
-          :version => Gem::Requirement.default,
-          :extensions => true,
-          :extensions_set => false,
+          :version => Gem::Requirement.default, :extensions => true,
           :all => false
 
     add_option('--all',
@@ -21,39 +19,9 @@ class Gem::Commands::PristineCommand < Gem::Command
       options[:all] = value
     end
 
-    add_option('--skip=gem_name',
-               'used on --all, skip if name == gem_name') do |value, options|
-      options[:skip] ||= []
-      options[:skip] << value
-    end
-
     add_option('--[no-]extensions',
-               'Restore gems with extensions',
-               'in addition to regular gems') do |value, options|
-      options[:extensions_set] = true
-      options[:extensions]     = value
-    end
-
-    add_option('--only-executables',
-               'Only restore executables') do |value, options|
-      options[:only_executables] = value
-    end
-
-    add_option('--only-plugins',
-               'Only restore plugins') do |value, options|
-      options[:only_plugins] = value
-    end
-
-    add_option('-E', '--[no-]env-shebang',
-               'Rewrite executables with a shebang',
-               'of /usr/bin/env') do |value, options|
-      options[:env_shebang] = value
-    end
-
-    add_option('-n', '--bindir DIR',
-               'Directory where executables are',
-               'located') do |value, options|
-      options[:bin_dir] = File.expand_path(value)
+               'Restore gems with extensions') do |value, options|
+      options[:extensions] = value
     end
 
     add_version_option('restore to', 'pristine condition')
@@ -64,125 +32,77 @@ class Gem::Commands::PristineCommand < Gem::Command
   end
 
   def defaults_str # :nodoc:
-    '--extensions'
+    "--all --extensions"
   end
 
   def description # :nodoc:
     <<-EOF
-The pristine command compares an installed gem with the contents of its
-cached .gem file and restores any files that don't match the cached .gem's
-copy.
+The pristine command compares the installed gems with the contents of the
+cached gem and restores any files that don't match the cached gem's copy.
 
-If you have made modifications to an installed gem, the pristine command
-will revert them.  All extensions are rebuilt and all bin stubs for the gem
-are regenerated after checking for modifications.
+If you have made modifications to your installed gems, the pristine command
+will revert them.  After all the gem's files have been checked all bin stubs
+for the gem are regenerated.
 
-If the cached gem cannot be found it will be downloaded.
+If the cached gem cannot be found, you will need to use `gem install` to
+revert the gem.
 
-If --no-extensions is provided pristine will not attempt to restore a gem
-with an extension.
-
-If --extensions is given (but not --all or gem names) only gems with
-extensions will be restored.
+If --no-extensions is provided pristine will not attempt to restore gems with
+extensions.
     EOF
   end
 
   def usage # :nodoc:
-    "#{program_name} [GEMNAME ...]"
+    "#{program_name} [args]"
   end
 
   def execute
-    specs = if options[:all]
+    specs = if options[:all] then
               Gem::Specification.map
-
-            # `--extensions` must be explicitly given to pristine only gems
-            # with extensions.
-            elsif options[:extensions_set] and
-                  options[:extensions] and options[:args].empty?
-              Gem::Specification.select do |spec|
-                spec.extensions and not spec.extensions.empty?
-              end
             else
-              get_all_gem_names.sort.map do |gem_name|
-                Gem::Specification.find_all_by_name(gem_name, options[:version]).reverse
+              get_all_gem_names.map do |gem_name|
+                Gem::Specification.find_all_by_name gem_name, options[:version]
               end.flatten
             end
 
-    specs = specs.select{|spec| RUBY_ENGINE == spec.platform || Gem::Platform.local === spec.platform || spec.platform == Gem::Platform::RUBY }
-
-    if specs.to_a.empty?
+    if specs.to_a.empty? then
       raise Gem::Exception,
             "Failed to find gems #{options[:args]} #{options[:version]}"
     end
 
+    install_dir = Gem.dir # TODO use installer option
+
+    raise Gem::FilePermissionError.new(install_dir) unless
+      File.writable?(install_dir)
+
     say "Restoring gems to pristine condition..."
 
     specs.each do |spec|
-      if spec.default_gem?
-        say "Skipped #{spec.full_name}, it is a default gem"
-        next
-      end
-
-      if options.has_key? :skip
-        if options[:skip].include? spec.name
-          say "Skipped #{spec.full_name}, it was given through options"
-          next
-        end
-      end
-
-      unless spec.extensions.empty? or options[:extensions] or options[:only_executables] or options[:only_plugins]
+      unless spec.extensions.empty? or options[:extensions] then
         say "Skipped #{spec.full_name}, it needs to compile an extension"
         next
       end
 
       gem = spec.cache_file
 
-      unless File.exist? gem or options[:only_executables] or options[:only_plugins]
+      unless File.exist? gem then
         require 'rubygems/remote_fetcher'
 
         say "Cached gem for #{spec.full_name} not found, attempting to fetch..."
-
         dep = Gem::Dependency.new spec.name, spec.version
-        found, _ = Gem::SpecFetcher.fetcher.spec_for_dependency dep
-
-        if found.empty?
-          say "Skipped #{spec.full_name}, it was not found from cache and remote sources"
-          next
-        end
-
-        spec_candidate, source = found.first
-        Gem::RemoteFetcher.fetcher.download spec_candidate, source.uri.to_s, spec.base_dir
+        Gem::RemoteFetcher.fetcher.download_to_cache dep
       end
 
-      env_shebang =
-        if options.include? :env_shebang
-          options[:env_shebang]
-        else
-          install_defaults = Gem::ConfigFile::PLATFORM_DEFAULTS['install']
-          install_defaults.to_s['--env-shebang']
-        end
-
-      bin_dir = options[:bin_dir] if options[:bin_dir]
-
-      installer_options = {
-        :wrappers => true,
-        :force => true,
-        :install_dir => spec.base_dir,
-        :env_shebang => env_shebang,
-        :build_args => spec.build_args,
-        :bin_dir => bin_dir,
-      }
-
-      if options[:only_executables]
-        installer = Gem::Installer.for_spec(spec, installer_options)
-        installer.generate_bin
-      elsif options[:only_plugins]
-        installer = Gem::Installer.for_spec(spec)
-        installer.generate_plugins
-      else
-        installer = Gem::Installer.at(gem, installer_options)
-        installer.install
-      end
+      # TODO use installer options
+      install_defaults = Gem::ConfigFile::PLATFORM_DEFAULTS['install']
+      installer_env_shebang = install_defaults.to_s['--env-shebang']
+      
+      installer = Gem::Installer.new(gem,
+                                     :wrappers => true,
+                                     :force => true,
+                                     :install_dir => spec.base_dir,
+                                     :env_shebang => installer_env_shebang)
+      installer.install
 
       say "Restored #{spec.full_name}"
     end

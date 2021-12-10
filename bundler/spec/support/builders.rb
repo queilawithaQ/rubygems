@@ -35,6 +35,11 @@ module Spec
       build_repo gem_repo1 do
         FileUtils.cp rake_path, "#{gem_repo1}/gems/"
 
+        build_gem "coffee-script-source"
+        build_gem "git"
+        build_gem "puma"
+        build_gem "minitest"
+
         build_gem "rack", %w[0.9.1 1.0.0] do |s|
           s.executables = "rackup"
           s.post_install_message = "Rack's post install message"
@@ -524,13 +529,13 @@ module Spec
         path = options[:path] || _default_path
         source = options[:source] || "git@#{path}"
         super(options.merge(:path => path, :source => source))
-        @context.git("config --global init.defaultBranch #{default_branch}", :dir => path)
-        @context.git("init", :dir => path)
-        @context.git("add *", :dir => path)
-        @context.git("config user.email lol@wut.com", :dir => path)
-        @context.git("config user.name lolwut", :dir => path)
-        @context.git("config commit.gpgsign false", :dir => path)
-        @context.git("commit -m OMG_INITIAL_COMMIT", :dir => path)
+        @context.git("config --global init.defaultBranch #{default_branch}", path)
+        @context.git("init", path)
+        @context.git("add *", path)
+        @context.git("config user.email lol@wut.com", path)
+        @context.git("config user.name lolwut", path)
+        @context.git("config commit.gpgsign false", path)
+        @context.git("commit -m OMG_INITIAL_COMMIT", path)
       end
     end
 
@@ -538,7 +543,7 @@ module Spec
       def _build(options)
         path = options[:path] || _default_path
         super(options.merge(:path => path))
-        @context.git("init --bare", :dir => path)
+        @context.git("init --bare", path)
       end
     end
 
@@ -548,32 +553,22 @@ module Spec
         update_gemspec = options[:gemspec] || false
         source = options[:source] || "git@#{libpath}"
 
-        @context.git "checkout master", :dir => libpath
-
         if branch = options[:branch]
-          raise "You can't specify `master` as the branch" if branch == "master"
-          escaped_branch = Shellwords.shellescape(branch)
-
-          if @context.git("branch -l #{escaped_branch}", :dir => libpath).empty?
-            @context.git("branch #{escaped_branch}", :dir => libpath)
-          end
-
-          @context.git("checkout #{escaped_branch}", :dir => libpath)
+          @context.git("checkout -b #{Shellwords.shellescape(branch)}", libpath)
         elsif tag = options[:tag]
-          @context.git("tag #{Shellwords.shellescape(tag)}", :dir => libpath)
+          @context.git("tag #{Shellwords.shellescape(tag)}", libpath)
         elsif options[:remote]
-          @context.git("remote add origin #{options[:remote]}", :dir => libpath)
+          @context.git("remote add origin #{options[:remote]}", libpath)
         elsif options[:push]
-          @context.git("push origin #{options[:push]}", :dir => libpath)
+          @context.git("push origin #{options[:push]}", libpath)
         end
 
-        current_ref = @context.git("rev-parse HEAD", :dir => libpath).strip
+        current_ref = @context.git("rev-parse HEAD", libpath).strip
         _default_files.keys.each do |path|
           _default_files[path] += "\n#{Builders.constantize(name)}_PREV_REF = '#{current_ref}'"
         end
         super(options.merge(:path => libpath, :gemspec => update_gemspec, :source => source))
-        @context.git("add *", :dir => libpath)
-        @context.git("commit -m BUMP", :dir => libpath, :raise_on_error => false)
+        @context.git("commit -am BUMP", libpath)
       end
     end
 
@@ -586,7 +581,7 @@ module Spec
       end
 
       def ref_for(ref, len = nil)
-        ref = context.git "rev-parse #{ref}", :dir => path
+        ref = context.git "rev-parse #{ref}", path
         ref = ref[0..len] if len
         ref
       end

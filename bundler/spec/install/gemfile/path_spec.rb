@@ -127,9 +127,9 @@ RSpec.describe "bundle install with explicit source paths" do
     L
 
     bundle :install, :dir => lib_path("demo")
-    expect(lib_path("demo/Gemfile.lock")).to have_lockfile(lockfile)
+    expect(lib_path("demo/Gemfile.lock")).to read_as(lockfile)
     bundle :update, :all => true, :dir => lib_path("demo")
-    expect(lib_path("demo/Gemfile.lock")).to have_lockfile(lockfile)
+    expect(lib_path("demo/Gemfile.lock")).to read_as(lockfile)
   end
 
   it "expands paths when comparing locked paths to Gemfile paths" do
@@ -181,6 +181,72 @@ RSpec.describe "bundle install with explicit source paths" do
     G
 
     expect(the_bundle).to include_gems "foo 1.0"
+  end
+
+  it "works when using prereleases of 0.0.0" do
+    build_lib "foo", "0.0.0.dev", :path => lib_path("foo")
+
+    gemfile <<~G
+      source "#{file_uri_for(gem_repo1)}"
+      gem "foo", :path => "#{lib_path("foo")}"
+    G
+
+    lockfile <<~L
+      PATH
+        remote: #{lib_path("foo")}
+        specs:
+          foo (0.0.0.dev)
+
+      GEM
+        remote: #{file_uri_for(gem_repo1)}/
+        specs:
+
+      PLATFORMS
+        #{lockfile_platforms}
+
+      DEPENDENCIES
+        foo!
+
+      BUNDLED WITH
+        #{Bundler::VERSION}
+    L
+
+    bundle :install
+
+    expect(the_bundle).to include_gems "foo 0.0.0.dev"
+  end
+
+  it "works when using uppercase prereleases of 0.0.0" do
+    build_lib "foo", "0.0.0.SNAPSHOT", :path => lib_path("foo")
+
+    gemfile <<~G
+      source "#{file_uri_for(gem_repo1)}"
+      gem "foo", :path => "#{lib_path("foo")}"
+    G
+
+    lockfile <<~L
+      PATH
+        remote: #{lib_path("foo")}
+        specs:
+          foo (0.0.0.SNAPSHOT)
+
+      GEM
+        remote: #{file_uri_for(gem_repo1)}/
+        specs:
+
+      PLATFORMS
+        #{lockfile_platforms}
+
+      DEPENDENCIES
+        foo!
+
+      BUNDLED WITH
+        #{Bundler::VERSION}
+    L
+
+    bundle :install
+
+    expect(the_bundle).to include_gems "foo 0.0.0.SNAPSHOT"
   end
 
   it "handles downgrades" do
@@ -552,7 +618,7 @@ RSpec.describe "bundle install with explicit source paths" do
 
       expect(the_bundle).to include_gems "rack 0.9.1"
 
-      lockfile_should_be <<-G
+      expect(lockfile).to eq <<~G
         PATH
           remote: #{lib_path("foo")}
           specs:
@@ -580,7 +646,7 @@ RSpec.describe "bundle install with explicit source paths" do
 
       bundle "install"
 
-      lockfile_should_be <<-G
+      expect(lockfile).to eq <<~G
         PATH
           remote: #{lib_path("foo")}
           specs:
@@ -614,7 +680,7 @@ RSpec.describe "bundle install with explicit source paths" do
 
       expect(the_bundle).to include_gems "rack 0.9.1"
 
-      lockfile_should_be <<-G
+      expect(lockfile).to eq <<~G
         PATH
           remote: #{lib_path("foo")}
           specs:
@@ -643,7 +709,7 @@ RSpec.describe "bundle install with explicit source paths" do
 
       bundle "install"
 
-      lockfile_should_be <<-G
+      expect(lockfile).to eq <<~G
         PATH
           remote: #{lib_path("foo")}
           specs:

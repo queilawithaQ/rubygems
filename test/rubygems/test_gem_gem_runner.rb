@@ -44,7 +44,7 @@ class TestGemGemRunner < Gem::TestCase
     gr = Gem::GemRunner.new
     gr.send :do_configuration, %W[--config-file #{temp_conf}]
 
-    assert_equal [other_gem_path, other_gem_home], Gem.path
+    assert_equal [other_gem_home, other_gem_path], Gem.path
     assert_equal %w[--commands], Gem::Command.extra_args
   end
 

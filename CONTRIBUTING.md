@@ -37,6 +37,10 @@ To run commands like `gem install` from the repo:
 
     ruby -Ilib bin/gem install
 
+To run commands like `bundle install` from the repo:
+
+    ruby bundler/spec/support/bundle.rb install
+
 ### Running Tests
 
 To run the entire test suite you can use: 
@@ -45,11 +49,11 @@ To run the entire test suite you can use:
 
 To run an individual test file located for example in `test/rubygems/test_deprecate.rb` you can use: 
 
-    ruby -Ilib:test test/rubygems/test_deprecate.rb 
+    ruby -Ilib:test:bundler/lib test/rubygems/test_deprecate.rb
     
 And to run an individual test method named `test_default` within a test file, you can use: 
 
-    ruby -Ilib:test test/rubygems/test_deprecate.rb -n /test_default/ 
+    ruby -Ilib:test:bundler/lib test/rubygems/test_deprecate.rb -n /test_default/
 
 ### Running bundler tests
 

@@ -59,7 +59,7 @@ module Gem
   # Path to specification files of default gems.
 
   def self.default_specifications_dir
-    File.join(Gem.default_dir, "specifications", "default")
+    @default_specifications_dir ||= File.join(Gem.default_dir, "specifications", "default")
   end
 
   ##
@@ -94,6 +94,13 @@ module Gem
 
   def self.user_home
     @user_home ||= find_home.tap(&Gem::UNTAINT)
+  end
+
+  ##
+  # Paths where RubyGems' .rb files and bin files are installed
+
+  def self.default_rubygems_dirs
+    nil # default to standard layout
   end
 
   ##

@@ -22,6 +22,23 @@ class GemTest < Gem::TestCase
     "the problem and ask for help."
   end
 
+  def test_operating_system_customizing_default_dir
+    pend "does not apply to truffleruby" if RUBY_ENGINE == 'truffleruby'
+
+    # On a non existing default dir, there should be no gems
+
+    path = util_install_operating_system_rb <<-RUBY
+      module Gem
+        def self.default_dir
+          @homebrew_path ||= File.expand_path("foo")
+        end
+      end
+    RUBY
+
+    output = Gem::Util.popen(*ruby_with_rubygems_and_fake_operating_system_in_load_path(path), '-S', "gem", "list", {:err => [:child, :out]}).strip
+    assert_empty output
+  end
+
   private
 
   def util_install_operating_system_rb(content)
@@ -32,8 +49,10 @@ class GemTest < Gem::TestCase
     FileUtils.mkdir_p dir_lib_rubygems_defaults_arg
 
     operating_system_rb = File.join dir_lib_rubygems_defaults_arg, "operating_system.rb"
-
     File.open(operating_system_rb, 'w') {|f| f.write content }
+
+    implementation_rb = File.join dir_lib_rubygems_defaults_arg, "#{RUBY_ENGINE}.rb"
+    File.open(implementation_rb, 'w') {|f| f.write "require_relative 'operating_system'" }
 
     File.join dir_lib_arg, "lib"
   end

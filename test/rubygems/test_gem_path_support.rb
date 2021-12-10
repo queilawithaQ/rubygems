@@ -1,5 +1,4 @@
-# frozen_string_literal: true
-require_relative 'helper'
+require 'rubygems/test_case'
 require 'rubygems'
 require 'fileutils'
 
@@ -12,24 +11,24 @@ class TestGemPathSupport < Gem::TestCase
   end
 
   def test_initialize
-    ps = Gem::PathSupport.new ENV
+    ps = Gem::PathSupport.new
 
     assert_equal ENV["GEM_HOME"], ps.home
 
-    expected = ENV["GEM_PATH"].split(File::PATH_SEPARATOR)
+    expected = util_path
     assert_equal expected, ps.path, "defaults to GEM_PATH"
   end
 
   def test_initialize_home
-    ps = Gem::PathSupport.new ENV.to_hash.merge("GEM_HOME" => "#{@tempdir}/foo")
+    ps = Gem::PathSupport.new "GEM_HOME" => "#{@tempdir}/foo"
 
-    assert_equal File.join(@tempdir, "foo"), ps.home
+    expected = File.join(@tempdir, "foo")
+    assert_equal expected, ps.home
 
-    expected = ENV["GEM_PATH"].split(File::PATH_SEPARATOR) + [File.join(@tempdir, 'foo')]
-    assert_equal expected, ps.path
+    assert_equal [expected, *util_path], ps.path
   end
 
-  if File::ALT_SEPARATOR
+  if defined?(File::ALT_SEPARATOR) and File::ALT_SEPARATOR
     def test_initialize_home_normalize
       alternate = @tempdir.gsub(File::SEPARATOR, File::ALT_SEPARATOR)
       ps = Gem::PathSupport.new "GEM_HOME" => alternate
@@ -39,100 +38,56 @@ class TestGemPathSupport < Gem::TestCase
   end
 
   def test_initialize_path
-    Gem.stub(:path_separator, File::PATH_SEPARATOR) do
-      ps = Gem::PathSupport.new ENV.to_hash.merge("GEM_PATH" => %W[#{@tempdir}/foo #{@tempdir}/bar].join(Gem.path_separator))
-
-      assert_equal ENV["GEM_HOME"], ps.home
-
-      expected = [
-        File.join(@tempdir, 'foo'),
-        File.join(@tempdir, 'bar'),
-        ENV["GEM_HOME"],
-      ]
-
-      assert_equal expected, ps.path
-    end
-  end
-
-  def test_initialize_regexp_path_separator
-    Gem.stub(:path_separator, /#{File::PATH_SEPARATOR}/) do
-      path = %W[#{@tempdir}/foo
-                #{File::PATH_SEPARATOR}
-                #{@tempdir}/bar
-                #{File::PATH_SEPARATOR}].join
-      ps = Gem::PathSupport.new "GEM_PATH" => path, "GEM_HOME" => ENV["GEM_HOME"]
-
-      assert_equal ENV["GEM_HOME"], ps.home
-
-      expected = [
-        File.join(@tempdir, 'foo'),
-        File.join(@tempdir, 'bar'),
-      ] + Gem.default_path << ENV["GEM_HOME"]
-
-      assert_equal expected, ps.path
-    end
-  end
-
-  def test_initialize_path_with_defaults
-    path = %W[#{@tempdir}/foo
-              #{File::PATH_SEPARATOR}
-              #{@tempdir}/bar
-              #{File::PATH_SEPARATOR}].join
-    ps = Gem::PathSupport.new "GEM_PATH" => path, "GEM_HOME" => ENV["GEM_HOME"]
+    ps = Gem::PathSupport.new "GEM_PATH" => %W[#{@tempdir}/foo #{@tempdir}/bar]
 
     assert_equal ENV["GEM_HOME"], ps.home
 
     expected = [
-      File.join(@tempdir, 'foo'),
-      File.join(@tempdir, 'bar'),
-    ] + Gem.default_path << ENV["GEM_HOME"]
+                ENV["GEM_HOME"],
+                File.join(@tempdir, 'foo'),
+                File.join(@tempdir, 'bar'),
+               ]
 
     assert_equal expected, ps.path
   end
 
   def test_initialize_home_path
-    Gem.stub(:path_separator, File::PATH_SEPARATOR) do
-      ps = Gem::PathSupport.new("GEM_HOME" => "#{@tempdir}/foo",
-                                "GEM_PATH" => %W[#{@tempdir}/foo #{@tempdir}/bar].join(Gem.path_separator))
+    ps = Gem::PathSupport.new("GEM_HOME" => "#{@tempdir}/foo",
+                              "GEM_PATH" => %W[#{@tempdir}/foo #{@tempdir}/bar])
 
-      assert_equal File.join(@tempdir, "foo"), ps.home
+    assert_equal File.join(@tempdir, "foo"), ps.home
 
-      expected = [File.join(@tempdir, 'foo'), File.join(@tempdir, 'bar')]
-      assert_equal expected, ps.path
-    end
+    expected = [File.join(@tempdir, 'foo'), File.join(@tempdir, 'bar')]
+    assert_equal expected, ps.path
   end
 
-  def test_initialize_spec
-    ENV["GEM_SPEC_CACHE"] = nil
+  def test_path_equals
+    ps = Gem::PathSupport.new
 
-    ps = Gem::PathSupport.new ENV
-    assert_equal Gem.default_spec_cache_dir, ps.spec_cache_dir
+    ps.send :path=, ['a', 'b']
 
-    ENV["GEM_SPEC_CACHE"] = 'bar'
-
-    ps = Gem::PathSupport.new ENV
-    assert_equal ENV["GEM_SPEC_CACHE"], ps.spec_cache_dir
-
-    ENV["GEM_SPEC_CACHE"] = File.join @tempdir, 'spec_cache'
-
-    ps = Gem::PathSupport.new "GEM_SPEC_CACHE" => "foo"
-    assert_equal "foo", ps.spec_cache_dir
+    assert_equal [@tempdir, 'a', 'b'], ps.path
   end
 
-  def test_gem_paths_do_not_contain_symlinks
-    dir = "#{@tempdir}/realgemdir"
-    symlink = "#{@tempdir}/symdir"
-    Dir.mkdir dir
-    begin
-      File.symlink(dir, symlink)
-    rescue NotImplementedError, SystemCallError
-      pend 'symlinks not supported'
-    end
-    not_existing = "#{@tempdir}/does_not_exist"
-    path = "#{symlink}#{File::PATH_SEPARATOR}#{not_existing}"
+  def test_path_equals_empty
+    ps = Gem::PathSupport.new
 
-    ps = Gem::PathSupport.new "GEM_PATH" => path, "GEM_HOME" => symlink
-    assert_equal dir, ps.home
-    assert_equal [dir, not_existing], ps.path
+    ps.send :path=, nil
+
+    assert_equal [@tempdir, 'something'], ps.path
+  end
+
+  def test_path_equals_empty_no_GEM_PATH
+    ENV.delete 'GEM_PATH'
+
+    ps = Gem::PathSupport.new
+
+    ps.send :path=, nil
+
+    assert_equal [@tempdir, *Gem.default_path], ps.path
+  end
+
+  def util_path
+    ENV["GEM_PATH"].split(File::PATH_SEPARATOR)
   end
 end

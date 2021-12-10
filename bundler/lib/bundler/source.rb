@@ -36,6 +36,8 @@ module Bundler
 
     def local!; end
 
+    def local_only!; end
+
     def cached!; end
 
     def remote!; end
@@ -65,7 +67,7 @@ module Bundler
       "#<#{self.class}:0x#{object_id} #{self}>"
     end
 
-    def to_err
+    def identifier
       to_s
     end
 

@@ -236,7 +236,7 @@ RSpec.describe "bundle clean" do
     bundle "config set path vendor/bundle"
     bundle "install"
 
-    update_git "foo", :path => lib_path("foo-bar")
+    update_git "foo-bar", :path => lib_path("foo-bar")
     revision2 = revision_for(lib_path("foo-bar"))
 
     bundle "update", :all => true
@@ -638,7 +638,7 @@ RSpec.describe "bundle clean" do
       s.executables = "irb"
     end
 
-    realworld_system_gems "fiddle --version 1.0.6", "tsort --version 0.1.0", "pathname --version 0.1.0", "set --version 1.0.1"
+    realworld_system_gems "fiddle --version 1.0.8", "tsort --version 0.1.0", "pathname --version 0.1.0", "set --version 1.0.1"
 
     install_gemfile <<-G
       source "#{file_uri_for(gem_repo2)}"

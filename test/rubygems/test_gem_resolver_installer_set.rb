@@ -64,6 +64,24 @@ class TestGemResolverInstallerSet < Gem::TestCase
     assert_equal %w[a-1], set.always_install.map {|s| s.full_name }
   end
 
+  def test_add_always_install_prerelease_github_problem
+    spec_fetcher do |fetcher|
+      fetcher.gem 'a', 1
+    end
+
+    # Github has an issue in which it will generate a misleading prerelease output in its RubyGems server API and
+    # returns a 0 version for the gem while it doesn't exist.
+    @fetcher.data["#{@gem_repo}prerelease_specs.#{Gem.marshal_version}.gz"] = util_gzip(Marshal.dump([
+      Gem::NameTuple.new('a', Gem::Version.new(0), 'ruby'),
+    ]))
+
+    set = Gem::Resolver::InstallerSet.new :both
+
+    set.add_always_install dep('a')
+
+    assert_equal %w[a-1], set.always_install.map {|s| s.full_name }
+  end
+
   def test_add_always_install_prerelease_only
     spec_fetcher do |fetcher|
       fetcher.gem 'a', '3.a'
@@ -74,6 +92,34 @@ class TestGemResolverInstallerSet < Gem::TestCase
     assert_raise Gem::UnsatisfiableDependencyError do
       set.add_always_install dep('a')
     end
+  end
+
+  def test_add_always_install_required_ruby_version
+    spec_fetcher do |fetcher|
+      fetcher.spec 'a', 2
+      fetcher.spec 'a', 2 do |s|
+        s.required_ruby_version = Gem::Requirement.new "< 2.5.0.a"
+        s.platform = Gem::Platform.local
+      end
+      fetcher.spec 'a', 3 do |s|
+        s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+      end
+      fetcher.spec 'a', 3 do |s|
+        s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+        s.platform = Gem::Platform.local
+      end
+    end
+
+    util_set_RUBY_VERSION '2.5.0'
+
+    set = Gem::Resolver::InstallerSet.new :both
+
+    spec = set.add_always_install dep('a', '>= 0')
+
+    assert_equal 1, spec.length
+    assert_equal 'a-2', spec[0].full_name
+  ensure
+    util_restore_RUBY_VERSION
   end
 
   def test_add_local

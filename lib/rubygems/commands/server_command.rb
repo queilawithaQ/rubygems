@@ -1,18 +1,14 @@
-# frozen_string_literal: true
 require 'rubygems/command'
 require 'rubygems/server'
-require 'rubygems/deprecate'
 
 class Gem::Commands::ServerCommand < Gem::Command
-  extend Gem::Deprecate
-  rubygems_deprecate_command
 
   def initialize
     super 'server', 'Documentation and gem repository HTTP server',
           :port => 8808, :gemdir => [], :daemon => false
 
     OptionParser.accept :Port do |port|
-      if port =~ /\A\d+\z/
+      if port =~ /\A\d+\z/ then
         port = Integer port
         raise OptionParser::InvalidArgument, "#{port}: not a port number" if
           port > 65535
@@ -82,7 +78,9 @@ You can set up a shortcut to gem server documentation using the URL:
   end
 
   def execute
-    options[:gemdir] = Gem.path if options[:gemdir].empty?
+    options[:gemdir] << Gem.dir if options[:gemdir].empty?
     Gem::Server.run options
   end
+
 end
+

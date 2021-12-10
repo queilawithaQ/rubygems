@@ -1,9 +1,9 @@
-# frozen_string_literal: true
-require_relative 'helper'
+require 'rubygems/test_case'
 require 'rubygems/platform'
 require 'rbconfig'
 
 class TestGemPlatform < Gem::TestCase
+
   def test_self_local
     util_set_arch 'i686-darwin8.10.1'
 
@@ -11,69 +11,10 @@ class TestGemPlatform < Gem::TestCase
   end
 
   def test_self_match
-    Gem::Deprecate.skip_during do
-      assert Gem::Platform.match(nil), 'nil == ruby'
-      assert Gem::Platform.match(Gem::Platform.local), 'exact match'
-      assert Gem::Platform.match(Gem::Platform.local.to_s), '=~ match'
-      assert Gem::Platform.match(Gem::Platform::RUBY), 'ruby'
-    end
-  end
-
-  def test_self_match_gem?
-    assert Gem::Platform.match_gem?(nil, 'json'), 'nil == ruby'
-    assert Gem::Platform.match_gem?(Gem::Platform.local, 'json'), 'exact match'
-    assert Gem::Platform.match_gem?(Gem::Platform.local.to_s, 'json'), '=~ match'
-    assert Gem::Platform.match_gem?(Gem::Platform::RUBY, 'json'), 'ruby'
-  end
-
-  def test_self_match_spec?
-    make_spec = -> platform do
-      util_spec 'mygem-for-platform-match_spec', '1' do |s|
-        s.platform = platform
-      end
-    end
-
-    assert Gem::Platform.match_spec?(make_spec.call(nil)), 'nil == ruby'
-    assert Gem::Platform.match_spec?(make_spec.call(Gem::Platform.local)), 'exact match'
-    assert Gem::Platform.match_spec?(make_spec.call(Gem::Platform.local.to_s)), '=~ match'
-    assert Gem::Platform.match_spec?(make_spec.call(Gem::Platform::RUBY)), 'ruby'
-  end
-
-  def test_self_match_spec_with_match_gem_override
-    make_spec = -> name, platform do
-      util_spec name, '1' do |s|
-        s.platform = platform
-      end
-    end
-
-    class << Gem::Platform
-      alias_method :original_match_gem?, :match_gem?
-      def match_gem?(platform, gem_name)
-        # e.g., sassc and libv8 are such gems, their native extensions do not use the Ruby C API
-        if gem_name == 'gem-with-ruby-impl-independent-precompiled-ext'
-          match_platforms?(platform, [Gem::Platform::RUBY, Gem::Platform.local])
-        else
-          match_platforms?(platform, Gem.platforms)
-        end
-      end
-    end
-
-    platforms = Gem.platforms
-    Gem.platforms = [Gem::Platform::RUBY]
-    begin
-      assert_equal true,  Gem::Platform.match_spec?(make_spec.call('mygem', Gem::Platform::RUBY))
-      assert_equal false, Gem::Platform.match_spec?(make_spec.call('mygem', Gem::Platform.local))
-
-      name = 'gem-with-ruby-impl-independent-precompiled-ext'
-      assert_equal true, Gem::Platform.match_spec?(make_spec.call(name, Gem::Platform.local))
-    ensure
-      Gem.platforms = platforms
-      class << Gem::Platform
-        remove_method :match_gem?
-        alias_method :match_gem?, :original_match_gem? # rubocop:disable Lint/DuplicateMethods
-        remove_method :original_match_gem?
-      end
-    end
+    assert Gem::Platform.match(nil), 'nil == ruby'
+    assert Gem::Platform.match(Gem::Platform.local), 'exact match'
+    assert Gem::Platform.match(Gem::Platform.local.to_s), '=~ match'
+    assert Gem::Platform.match(Gem::Platform::RUBY), 'ruby'
   end
 
   def test_self_new
@@ -110,8 +51,6 @@ class TestGemPlatform < Gem::TestCase
       'i386-freebsd5'          => ['x86',       'freebsd',   '5'],
       'i386-freebsd6'          => ['x86',       'freebsd',   '6'],
       'i386-freebsd7'          => ['x86',       'freebsd',   '7'],
-      'i386-freebsd'           => ['x86',       'freebsd',   nil],
-      'universal-freebsd'      => ['universal', 'freebsd',   nil],
       'i386-java1.5'           => ['x86',       'java',      '1.5'],
       'x86-java1.6'            => ['x86',       'java',      '1.6'],
       'i386-java1.6'           => ['x86',       'java',      '1.6'],
@@ -134,10 +73,8 @@ class TestGemPlatform < Gem::TestCase
       'i386-solaris2.8'        => ['x86',       'solaris',   '2.8'],
       'mswin32'                => ['x86',       'mswin32',   nil],
       'x86_64-linux'           => ['x86_64',    'linux',     nil],
-      'x86_64-linux-musl'      => ['x86_64',    'linux',     'musl'],
       'x86_64-openbsd3.9'      => ['x86_64',    'openbsd',   '3.9'],
       'x86_64-openbsd4.0'      => ['x86_64',    'openbsd',   '4.0'],
-      'x86_64-openbsd'         => ['x86_64',    'openbsd',   nil],
     }
 
     test_cases.each do |arch, expected|
@@ -176,11 +113,7 @@ class TestGemPlatform < Gem::TestCase
 
     assert_equal expected, platform.to_a, 'i386-mswin32 VC6'
   ensure
-    if orig_RUBY_SO_NAME
-      RbConfig::CONFIG['RUBY_SO_NAME'] = orig_RUBY_SO_NAME
-    else
-      RbConfig::CONFIG.delete 'RUBY_SO_NAME'
-    end
+    RbConfig::CONFIG['RUBY_SO_NAME'] = orig_RUBY_SO_NAME
   end
 
   def test_initialize_platform
@@ -203,8 +136,14 @@ class TestGemPlatform < Gem::TestCase
     assert_equal '1', platform.version
   end
 
+  def test_empty
+    platform = Gem::Platform.new 'cpu-other_platform1'
+    assert_respond_to platform, :empty?
+    assert_equal false, Gem::Deprecate.skip_during { platform.empty? }
+  end
+
   def test_to_s
-    if win_platform?
+    if win_platform? then
       assert_equal 'x86-mswin32-60', Gem::Platform.local.to_s
     else
       assert_equal 'x86-darwin-8', Gem::Platform.local.to_s
@@ -248,35 +187,6 @@ class TestGemPlatform < Gem::TestCase
     assert((ppc_darwin8 === Gem::Platform.local), 'universal =~ ppc')
     assert((uni_darwin8 === Gem::Platform.local), 'universal =~ universal')
     assert((x86_darwin8 === Gem::Platform.local), 'universal =~ x86')
-  end
-
-  def test_nil_cpu_arch_is_treated_as_universal
-    with_nil_arch = Gem::Platform.new [nil, 'mingw32']
-    with_uni_arch = Gem::Platform.new ['universal', 'mingw32']
-    with_x86_arch = Gem::Platform.new ['x86', 'mingw32']
-
-    assert((with_nil_arch === with_uni_arch), 'nil =~ universal')
-    assert((with_uni_arch === with_nil_arch), 'universal =~ nil')
-    assert((with_nil_arch === with_x86_arch), 'nil =~ x86')
-    assert((with_x86_arch === with_nil_arch), 'x86 =~ nil')
-  end
-
-  def test_equals3_cpu_arm
-    arm   = Gem::Platform.new 'arm-linux'
-    armv5 = Gem::Platform.new 'armv5-linux'
-    armv7 = Gem::Platform.new 'armv7-linux'
-
-    util_set_arch 'armv5-linux'
-    assert((arm   === Gem::Platform.local), 'arm   === armv5')
-    assert((armv5 === Gem::Platform.local), 'armv5 === armv5')
-    refute((armv7 === Gem::Platform.local), 'armv7 === armv5')
-    refute((Gem::Platform.local === arm), 'armv5 === arm')
-
-    util_set_arch 'armv7-linux'
-    assert((arm   === Gem::Platform.local), 'arm   === armv7')
-    refute((armv5 === Gem::Platform.local), 'armv5 === armv7')
-    assert((armv7 === Gem::Platform.local), 'armv7 === armv7')
-    refute((Gem::Platform.local === arm), 'armv7 === arm')
   end
 
   def test_equals3_version
@@ -356,19 +266,12 @@ class TestGemPlatform < Gem::TestCase
     assert_local_match 'sparc-solaris2.8-mq5.3'
   end
 
-  def test_inspect
-    result = Gem::Platform.new("universal-java11").inspect
-
-    assert_equal 1, result.scan(/@cpu=/).size
-    assert_equal 1, result.scan(/@os=/).size
-    assert_equal 1, result.scan(/@version=/).size
-  end
-
-  def assert_local_match(name)
+  def assert_local_match name
     assert_match Gem::Platform.local, name
   end
 
-  def refute_local_match(name)
+  def refute_local_match name
     refute_match Gem::Platform.local, name
   end
 end
+

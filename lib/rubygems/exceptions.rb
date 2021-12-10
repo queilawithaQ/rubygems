@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'rubygems/deprecate'
-require 'rubygems/unknown_command_spell_checker'
+require_relative 'deprecate'
+require_relative 'unknown_command_spell_checker'
 
 ##
 # Base exception class for RubyGems.  All exception raised by RubyGems are a
@@ -284,3 +284,4 @@ end
 # Backwards compatible typo'd exception class for early RubyGems 2.0.x
 
 Gem::UnsatisfiableDepedencyError = Gem::UnsatisfiableDependencyError # :nodoc:
+Gem.deprecate_constant :UnsatisfiableDepedencyError

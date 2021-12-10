@@ -1,10 +1,9 @@
-# frozen_string_literal: true
+require 'webrick'
 require 'zlib'
 require 'erb'
-require 'uri'
 
 require 'rubygems'
-require 'rubygems/rdoc'
+require 'rubygems/doc_manager'
 
 ##
 # Gem::Server and allows users to serve gems for consumption by
@@ -18,6 +17,9 @@ require 'rubygems/rdoc'
 # * "/quick/" - Individual gemspecs
 # * "/gems" - Direct access to download the installable gems
 # * "/rdoc?q=" - Search for installed rdoc documentation
+# * legacy indexes:
+#   * "/Marshal.#{Gem.marshal_version}" - Full SourceIndex dump of metadata
+#     for installed gems
 #
 # == Usage
 #
@@ -28,12 +30,13 @@ require 'rubygems/rdoc'
 # TODO Refactor into a real WEBrick servlet to remove code duplication.
 
 class Gem::Server
+
   attr_reader :spec_dirs
 
   include ERB::Util
   include Gem::UserInteraction
 
-  SEARCH = <<-ERB.freeze
+  SEARCH = <<-SEARCH
       <form class="headerSearch" name="headerSearchForm" method="get" action="/rdoc">
         <div id="search" style="float:right">
           <label for="q">Filter/Search</label>
@@ -41,9 +44,9 @@ class Gem::Server
           <button type="submit" style="display:none"></button>
         </div>
       </form>
-  ERB
+  SEARCH
 
-  DOC_TEMPLATE = <<-'ERB'.freeze
+  DOC_TEMPLATE = <<-'DOC_TEMPLATE'
   <?xml version="1.0" encoding="iso-8859-1"?>
   <!DOCTYPE html
        PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
@@ -67,33 +70,33 @@ class Gem::Server
         <h1>Summary</h1>
   <p>There are <%=values["gem_count"]%> gems installed:</p>
   <p>
-  <%= values["specs"].map { |v| "<a href=\"##{u v["name"]}\">#{h v["name"]}</a>" }.join ', ' %>.
+  <%= values["specs"].map { |v| "<a href=\"##{v["name"]}\">#{v["name"]}</a>" }.join ', ' %>.
   <h1>Gems</h1>
 
   <dl>
   <% values["specs"].each do |spec| %>
     <dt>
     <% if spec["first_name_entry"] then %>
-      <a name="<%=h spec["name"]%>"></a>
+      <a name="<%=spec["name"]%>"></a>
     <% end %>
 
-    <b><%=h spec["name"]%> <%=h spec["version"]%></b>
+    <b><%=spec["name"]%> <%=spec["version"]%></b>
 
-    <% if spec["ri_installed"] || spec["rdoc_installed"] then %>
+    <% if spec["rdoc_installed"] then %>
       <a href="<%=spec["doc_path"]%>">[rdoc]</a>
     <% else %>
       <span title="rdoc not installed">[rdoc]</span>
     <% end %>
 
     <% if spec["homepage"] then %>
-      <a href="<%=uri_encode spec["homepage"]%>" title="<%=h spec["homepage"]%>">[www]</a>
+      <a href="<%=spec["homepage"]%>" title="<%=spec["homepage"]%>">[www]</a>
     <% else %>
       <span title="no homepage available">[www]</span>
     <% end %>
 
     <% if spec["has_deps"] then %>
      - depends on
-      <%= spec["dependencies"].map { |v| "<a href=\"##{u v["name"]}\">#{h v["name"]}</a>" }.join ', ' %>.
+      <%= spec["dependencies"].map { |v| "<a href=\"##{v["name"]}\">#{v["name"]}</a>" }.join ', ' %>.
     <% end %>
     </dt>
     <dd>
@@ -107,7 +110,7 @@ class Gem::Server
           Executables are
       <%end%>
 
-      <%= spec["executables"].map { |v| "<span class=\"context-item-name\">#{h v["executable"]}</span>"}.join ', ' %>.
+      <%= spec["executables"].map { |v| "<span class=\"context-item-name\">#{v["executable"]}</span>"}.join ', ' %>.
 
     <%end%>
     <br/>
@@ -124,10 +127,10 @@ class Gem::Server
   </div>
   </body>
   </html>
-  ERB
+  DOC_TEMPLATE
 
   # CSS is copy & paste from rdoc-style.css, RDoc V1.0.1 - 20041108
-  RDOC_CSS = <<-CSS.freeze
+  RDOC_CSS = <<-RDOC_CSS
 body {
     font-family: Verdana,Arial,Helvetica,sans-serif;
     font-size:   90%;
@@ -335,9 +338,9 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 .ruby-comment { color: #b22222; font-weight: bold; background: transparent; }
 .ruby-regexp  { color: #ffa07a; background: transparent; }
 .ruby-value   { color: #7fffd4; background: transparent; }
-  CSS
+  RDOC_CSS
 
-  RDOC_NO_DOCUMENTATION = <<-'ERB'.freeze
+  RDOC_NO_DOCUMENTATION = <<-'NO_DOC'
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
           "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -369,9 +372,9 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     </div>
   </body>
 </html>
-  ERB
+  NO_DOC
 
-  RDOC_SEARCH_TEMPLATE = <<-'ERB'.freeze
+  RDOC_SEARCH_TEMPLATE = <<-'RDOC_SEARCH'
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
           "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -398,10 +401,10 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
           <% doc_items.each do |doc_item| %>
             <dt>
               <b><%=doc_item[:name]%></b>
-              <a href="<%=u doc_item[:url]%>">[rdoc]</a>
+              <a href="<%=doc_item[:url]%>">[rdoc]</a>
             </dt>
             <dd>
-              <%=h doc_item[:summary]%>
+              <%=doc_item[:summary]%>
               <br/>
               <br/>
             </dd>
@@ -420,67 +423,70 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     </div>
   </body>
 </html>
-  ERB
+  RDOC_SEARCH
 
   def self.run(options)
     new(options[:gemdir], options[:port], options[:daemon],
         options[:launch], options[:addresses]).run
   end
 
-  def initialize(gem_dirs, port, daemon, launch = nil, addresses = nil)
-    begin
-      require 'webrick'
-    rescue LoadError
-      abort "webrick is not found. You may need to `gem install webrick` to install webrick."
-    end
+  ##
+  # Only the first directory in gem_dirs is used for serving gems
 
-    Gem::RDoc.load_rdoc
+  def initialize(gem_dirs, port, daemon, launch = nil, addresses = nil)
     Socket.do_not_reverse_lookup = true
 
-    @gem_dirs  = Array gem_dirs
-    @port      = port
-    @daemon    = daemon
-    @launch    = launch
+    @gem_dirs = Array gem_dirs
+    @port = port
+    @daemon = daemon
+    @launch = launch
     @addresses = addresses
-
-    logger  = WEBrick::Log.new nil, WEBrick::BasicLog::FATAL
+    logger = WEBrick::Log.new nil, WEBrick::BasicLog::FATAL
     @server = WEBrick::HTTPServer.new :DoNotListen => true, :Logger => logger
 
-    @spec_dirs = @gem_dirs.map {|gem_dir| File.join gem_dir, 'specifications' }
-    @spec_dirs.reject! {|spec_dir| !File.directory? spec_dir }
+    @spec_dirs = @gem_dirs.map do |gem_dir|
+      spec_dir = File.join gem_dir, 'specifications'
 
-    reset_gems
+      unless File.directory? spec_dir then
+        raise ArgumentError, "#{gem_dir} does not appear to be a gem repository"
+      end
 
-    @have_rdoc_4_plus = nil
+      spec_dir
+    end
+
+    Gem::Specification.dirs = @gem_dirs
   end
 
-  def add_date(res)
+  def Marshal(req, res)
+    Gem::Specification.reset
+
+    add_date res
+
+    index = Gem::Deprecate.skip_during { Marshal.dump Gem.source_index }
+
+    if req.request_method == 'HEAD' then
+      res['content-length'] = index.length
+      return
+    end
+
+    if req.path =~ /Z$/ then
+      res['content-type'] = 'application/x-deflate'
+      index = Gem.deflate index
+    else
+      res['content-type'] = 'application/octet-stream'
+    end
+
+    res.body << index
+  end
+
+  def add_date res
     res['date'] = @spec_dirs.map do |spec_dir|
       File.stat(spec_dir).mtime
     end.max
   end
 
-  def uri_encode(str)
-    str.gsub(URI::UNSAFE) do |match|
-      match.each_byte.map {|c| sprintf('%%%02X', c.ord) }.join
-    end
-  end
-
-  def doc_root(gem_name)
-    if have_rdoc_4_plus?
-      "/doc_root/#{u gem_name}/"
-    else
-      "/doc_root/#{u gem_name}/rdoc/index.html"
-    end
-  end
-
-  def have_rdoc_4_plus?
-    @have_rdoc_4_plus ||=
-      Gem::Requirement.new('>= 4.0.0.preview2').satisfied_by? Gem::RDoc.rdoc_version
-  end
-
   def latest_specs(req, res)
-    reset_gems
+    Gem::Specification.reset
 
     res['content-type'] = 'application/x-gzip'
 
@@ -495,14 +501,14 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 
     specs = Marshal.dump specs
 
-    if req.path =~ /\.gz$/
-      specs = Gem::Util.gzip specs
+    if req.path =~ /\.gz$/ then
+      specs = Gem.gzip specs
       res['content-type'] = 'application/x-gzip'
     else
       res['content-type'] = 'application/octet-stream'
     end
 
-    if req.request_method == 'HEAD'
+    if req.request_method == 'HEAD' then
       res['content-length'] = specs.length
     else
       res.body << specs
@@ -513,7 +519,7 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
   # Creates server sockets based on the addresses option.  If no addresses
   # were given a server socket for all interfaces is created.
 
-  def listen(addresses = @addresses)
+  def listen addresses = @addresses
     addresses = [nil] unless addresses
 
     listeners = 0
@@ -533,63 +539,41 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
       end
     end
 
-    if @server.listeners.empty?
+    if @server.listeners.empty? then
       say "Unable to start a server."
       say "Check for running servers or your --bind and --port arguments"
       terminate_interaction 1
     end
   end
 
-  def prerelease_specs(req, res)
-    reset_gems
-
-    res['content-type'] = 'application/x-gzip'
-
-    add_date res
-
-    specs = Gem::Specification.select do |spec|
-      spec.version.prerelease?
-    end.sort.map do |spec|
-      platform = spec.original_platform || Gem::Platform::RUBY
-      [spec.name, spec.version, platform]
-    end
-
-    specs = Marshal.dump specs
-
-    if req.path =~ /\.gz$/
-      specs = Gem::Util.gzip specs
-      res['content-type'] = 'application/x-gzip'
-    else
-      res['content-type'] = 'application/octet-stream'
-    end
-
-    if req.request_method == 'HEAD'
-      res['content-length'] = specs.length
-    else
-      res.body << specs
-    end
-  end
-
   def quick(req, res)
-    reset_gems
+    Gem::Specification.reset
 
     res['content-type'] = 'text/plain'
     add_date res
 
     case req.request_uri.path
-    when %r{^/quick/(Marshal.#{Regexp.escape Gem.marshal_version}/)?(.*?)\.gemspec\.rz$} then
-      marshal_format, full_name = $1, $2
-      specs = Gem::Specification.find_all_by_full_name(full_name)
+    when %r|^/quick/(Marshal.#{Regexp.escape Gem.marshal_version}/)?(.*?)-([0-9.]+)(-.*?)?\.gemspec\.rz$| then
+      marshal_format, name, version, platform = $1, $2, $3, $4
+      specs = Gem::Specification.find_all_by_name name, version
 
-      selector = full_name.inspect
+      selector = [name, version, platform].map(&:inspect).join ' '
 
-      if specs.empty?
+      platform = if platform then
+                   Gem::Platform.new platform.sub(/^-/, '')
+                 else
+                   Gem::Platform::RUBY
+                 end
+
+      specs = specs.select { |s| s.platform == platform }
+
+      if specs.empty? then
         res.status = 404
         res.body = "No gems found matching #{selector}"
-      elsif specs.length > 1
+      elsif specs.length > 1 then
         res.status = 500
         res.body = "Multiple gems found matching #{selector}"
-      elsif marshal_format
+      elsif marshal_format then
         res['content-type'] = 'application/x-deflate'
         res.body << Gem.deflate(Marshal.dump(specs.first))
       end
@@ -599,8 +583,7 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
   end
 
   def root(req, res)
-    reset_gems
-
+    Gem::Specification.reset
     add_date res
 
     raise WEBrick::HTTPStatus::NotFound, "`#{req.path}' not found." unless
@@ -611,47 +594,34 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 
     Gem::Specification.each do |spec|
       total_file_count += spec.files.size
-      deps = spec.dependencies.map do |dep|
+      deps = spec.dependencies.map { |dep|
         {
           "name"    => dep.name,
           "type"    => dep.type,
           "version" => dep.requirement.to_s,
         }
-      end
+      }
 
-      deps = deps.sort_by {|dep| [dep["name"].downcase, dep["version"]] }
+      deps = deps.sort_by { |dep| [dep["name"].downcase, dep["version"]] }
       deps.last["is_last"] = true unless deps.empty?
 
       # executables
-      executables = spec.executables.sort.collect {|exec| {"executable" => exec} }
+      executables = spec.executables.sort.collect { |exec| {"executable" => exec} }
       executables = nil if executables.empty?
       executables.last["is_last"] = true if executables
-
-      # Pre-process spec homepage for safety reasons
-      begin
-        homepage_uri = URI.parse(spec.homepage)
-        if [URI::HTTP, URI::HTTPS].member? homepage_uri.class
-          homepage_uri = spec.homepage
-        else
-          homepage_uri = "."
-        end
-      rescue URI::InvalidURIError
-        homepage_uri = "."
-      end
 
       specs << {
         "authors"             => spec.authors.sort.join(", "),
         "date"                => spec.date.to_s,
         "dependencies"        => deps,
-        "doc_path"            => doc_root(spec.full_name),
+        "doc_path"            => "/doc_root/#{spec.full_name}/rdoc/index.html",
         "executables"         => executables,
         "only_one_executable" => (executables && executables.size == 1),
         "full_name"           => spec.full_name,
         "has_deps"            => !deps.empty?,
-        "homepage"            => homepage_uri,
+        "homepage"            => spec.homepage,
         "name"                => spec.name,
-        "rdoc_installed"      => Gem::RDoc.new(spec).rdoc_installed?,
-        "ri_installed"        => Gem::RDoc.new(spec).ri_installed?,
+        "rdoc_installed"      => Gem::DocManager.new(spec).rdoc_installed?,
         "summary"             => spec.summary,
         "version"             => spec.version.to_s,
       }
@@ -660,19 +630,19 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     specs << {
       "authors" => "Chad Fowler, Rich Kilmer, Jim Weirich, Eric Hodel and others",
       "dependencies" => [],
-      "doc_path" => doc_root("rubygems-#{Gem::VERSION}"),
+      "doc_path" => "/doc_root/rubygems-#{Gem::VERSION}/rdoc/index.html",
       "executables" => [{"executable" => 'gem', "is_last" => true}],
       "only_one_executable" => true,
       "full_name" => "rubygems-#{Gem::VERSION}",
       "has_deps" => false,
-      "homepage" => "https://guides.rubygems.org/",
+      "homepage" => "http://docs.rubygems.org/",
       "name" => 'rubygems',
-      "ri_installed" => true,
+      "rdoc_installed" => true,
       "summary" => "RubyGems itself",
       "version" => Gem::VERSION,
     }
 
-    specs = specs.sort_by {|spec| [spec["name"].downcase, spec["version"]] }
+    specs = specs.sort_by { |spec| [spec["name"].downcase, spec["version"]] }
     specs.last["is_last"] = true
 
     # tag all specs with first_name_entry
@@ -715,13 +685,13 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
   # documentation for the particular gem, otherwise a list with results is
   # shown.
   #
-  # === Additional trick - install documentation for Ruby core
+  # === Additional trick - install documentation for ruby core
   #
   # Note: please adjust paths accordingly use for example 'locate yaml.rb' and
   # 'gem environment' to identify directories, that are specific for your
   # local installation
   #
-  # 1. install Ruby sources
+  # 1. install ruby sources
   #      cd /usr/src
   #      sudo apt-get source ruby
   #
@@ -743,40 +713,33 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
   end
 
   ##
-  # Updates the server to use the latest installed gems.
-
-  def reset_gems # :nodoc:
-    Gem::Specification.dirs = @gem_dirs
-  end
-
-  ##
   # Returns true and prepares http response, if rdoc for the requested gem
   # name pattern was found.
   #
   # The search is based on the file system content, not on the gems metadata.
-  # This allows additional documentation folders like 'core' for the Ruby core
+  # This allows additional documentation folders like 'core' for the ruby core
   # documentation - just put it underneath the main doc folder.
 
   def show_rdoc_for_pattern(pattern, res)
-    found_gems = Dir.glob("{#{@gem_dirs.join ','}}/doc/#{pattern}").select do |path|
+    found_gems = Dir.glob("{#{@gem_dirs.join ','}}/doc/#{pattern}").select {|path|
       File.exist? File.join(path, 'rdoc/index.html')
-    end
+    }
     case found_gems.length
     when 0
       return false
     when 1
       new_path = File.basename(found_gems[0])
       res.status = 302
-      res['Location'] = doc_root new_path
+      res['Location'] = "/doc_root/#{new_path}/rdoc/index.html"
       return true
     else
       doc_items = []
       found_gems.each do |file_name|
         base_name = File.basename(file_name)
         doc_items << {
-          :name    => base_name,
-          :url     => doc_root(new_path),
-          :summary => '',
+          :name => base_name,
+          :url => "/doc_root/#{base_name}/rdoc/index.html",
+          :summary => ''
         }
       end
 
@@ -793,6 +756,9 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 
     WEBrick::Daemon.start if @daemon
 
+    @server.mount_proc "/Marshal.#{Gem.marshal_version}", method(:Marshal)
+    @server.mount_proc "/Marshal.#{Gem.marshal_version}.Z", method(:Marshal)
+
     @server.mount_proc "/specs.#{Gem.marshal_version}", method(:specs)
     @server.mount_proc "/specs.#{Gem.marshal_version}.gz", method(:specs)
 
@@ -800,11 +766,6 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
                        method(:latest_specs)
     @server.mount_proc "/latest_specs.#{Gem.marshal_version}.gz",
                        method(:latest_specs)
-
-    @server.mount_proc "/prerelease_specs.#{Gem.marshal_version}",
-                       method(:prerelease_specs)
-    @server.mount_proc "/prerelease_specs.#{Gem.marshal_version}.gz",
-                       method(:prerelease_specs)
 
     @server.mount_proc "/quick/", method(:quick)
 
@@ -818,21 +779,10 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 
     @server.mount_proc "/rdoc", method(:rdoc)
 
-    file_handlers = {
-      '/gems' => '/cache/',
-    }
-
-    if have_rdoc_4_plus?
-      @server.mount '/doc_root', RDoc::Servlet, '/doc_root'
-    else
-      file_handlers['/doc_root'] = '/doc/'
-    end
-
-    @gem_dirs.each do |gem_dir|
-      file_handlers.each do |mount_point, mount_dir|
-        @server.mount(mount_point, WEBrick::HTTPServlet::FileHandler,
-                      File.join(gem_dir, mount_dir), true)
-      end
+    paths = { "/gems" => "/cache/", "/doc_root" => "/doc/" }
+    paths.each do |mount_point, mount_dir|
+      @server.mount(mount_point, WEBrick::HTTPServlet::FileHandler,
+                    File.join(@gem_dirs.first, mount_dir), true)
     end
 
     trap("INT") { @server.shutdown; exit! }
@@ -844,7 +794,7 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
   end
 
   def specs(req, res)
-    reset_gems
+    Gem::Specification.reset
 
     add_date res
 
@@ -855,14 +805,14 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
 
     specs = Marshal.dump specs
 
-    if req.path =~ /\.gz$/
-      specs = Gem::Util.gzip specs
+    if req.path =~ /\.gz$/ then
+      specs = Gem.gzip specs
       res['content-type'] = 'application/x-gzip'
     else
       res['content-type'] = 'application/octet-stream'
     end
 
-    if req.request_method == 'HEAD'
+    if req.request_method == 'HEAD' then
       res['content-length'] = specs.length
     else
       res.body << specs
@@ -873,7 +823,7 @@ div.method-source-code pre { color: #ffdead; overflow: hidden; }
     listeners = @server.listeners.map{|l| l.addr[2] }
 
     # TODO: 0.0.0.0 == any, not localhost.
-    host = listeners.any?{|l| l == '0.0.0.0' } ? 'localhost' : listeners.first
+    host = listeners.any?{|l| l == '0.0.0.0'} ? 'localhost' : listeners.first
 
     say "Launching browser to http://#{host}:#{@port}"
 

@@ -2,18 +2,19 @@ name: Ruby
 
 on:
   push:
-    - <%= config[:git_default_branch] %>
+    branches:
+      - <%= config[:git_default_branch] %>
 
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    name: Ruby ${{ matrix.ruby }}
     strategy:
       matrix:
         ruby:
-          - <%= RUBY_VERSION %>
+          - '<%= RUBY_VERSION %>'
 
     steps:
     - uses: actions/checkout@v2

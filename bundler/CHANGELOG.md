@@ -1,3 +1,129 @@
+# 2.2.33 (December 7, 2021)
+
+## Security fixes:
+
+  - Pass "--" to git commands to separate positional and optional args [#5142](https://github.com/rubygems/rubygems/pull/5142)
+
+## Enhancements:
+
+  - Accept pull request URLs as github source [#5126](https://github.com/rubygems/rubygems/pull/5126)
+  - Add `--version` parameter to `bundle info` command [#5137](https://github.com/rubygems/rubygems/pull/5137)
+  - Let original `Errno::EACCES` error be raised in compact index updater [#5110](https://github.com/rubygems/rubygems/pull/5110)
+  - Improve gemfile-lockfile source equivalence errors [#5120](https://github.com/rubygems/rubygems/pull/5120)
+  - Avoid float-to-string loss of characters in GitHub Actions configuration labels in new gem template [#5089](https://github.com/rubygems/rubygems/pull/5089)
+  - Add an initial rbs template to `bundle gem` skeleton [#5041](https://github.com/rubygems/rubygems/pull/5041)
+  - Avoid shared libraries not getting environment passed right after argv in memory when `bundle exec` is used [#4815](https://github.com/rubygems/rubygems/pull/4815)
+
+## Bug fixes:
+
+  - Don't cleanup paths from gems already activated from `$LOAD_PATH` [#5111](https://github.com/rubygems/rubygems/pull/5111)
+  - Fix handling prereleases of 0 versions, like 0.0.0.dev or 0.0.0.SNAPSHOT [#5116](https://github.com/rubygems/rubygems/pull/5116)
+  - Fix escape of filenames in `bundle doctor` [#5102](https://github.com/rubygems/rubygems/pull/5102)
+  - Don't unlock dependencies when running `bundle install` after changing global source [#5090](https://github.com/rubygems/rubygems/pull/5090)
+  - Fix missing locked specs when depended on another platform [#5092](https://github.com/rubygems/rubygems/pull/5092)
+  - Fix `bundle info` sometimes claiming that bundler has been deleted [#5097](https://github.com/rubygems/rubygems/pull/5097)
+
+## Documentation:
+
+  - Ignore to generate the documentation from vendored libraries [#5118](https://github.com/rubygems/rubygems/pull/5118)
+
+# 2.2.32 (November 23, 2021)
+
+## Enhancements:
+
+  - Clarify `bundle viz` deprecation [#5083](https://github.com/rubygems/rubygems/pull/5083)
+  - Unlock dependencies that no longer match lockfile [#5068](https://github.com/rubygems/rubygems/pull/5068)
+  - Use `shellsplit` instead of array of strings for git push [#5062](https://github.com/rubygems/rubygems/pull/5062)
+  - Re-enable `default_ignores` option for standard [#5003](https://github.com/rubygems/rubygems/pull/5003)
+
+## Bug fixes:
+
+  - Fix downgrading dependencies by changing the `Gemfile` and running `bundle update` [#5078](https://github.com/rubygems/rubygems/pull/5078)
+
+# 2.2.31 (November 8, 2021)
+
+## Enhancements:
+
+  - Link to working `bundler-graph` plugin in `bundle viz` deprecation message [#5061](https://github.com/rubygems/rubygems/pull/5061)
+  - Memoize materialized specs when requiring `bundler/setup` [#5033](https://github.com/rubygems/rubygems/pull/5033)
+  - Allow custom LicenseRef [#5013](https://github.com/rubygems/rubygems/pull/5013)
+  - Better error when installing a lockfile with git sources and git is not installed [#5036](https://github.com/rubygems/rubygems/pull/5036)
+  - Only delete cached gem when it's corrupted [#5031](https://github.com/rubygems/rubygems/pull/5031)
+  - Support gemified `tsort` [#5032](https://github.com/rubygems/rubygems/pull/5032)
+  - Add standard option alongside rubocop to `bundle gem` [#4411](https://github.com/rubygems/rubygems/pull/4411)
+
+## Bug fixes:
+
+  - Fix system man pages no longer working after bundler overrides `MANPATH` [#5039](https://github.com/rubygems/rubygems/pull/5039)
+  - Don't warn when a lockfile is locked to a dev version [#5018](https://github.com/rubygems/rubygems/pull/5018)
+
+# 2.2.30 (October 26, 2021)
+
+## Enhancements:
+
+  - Add a custom SHA1 digest implementation to no longer depend on the digest gem before we know which version to activate [#4989](https://github.com/rubygems/rubygems/pull/4989)
+  - Ensure vendored gems have licenses [#4998](https://github.com/rubygems/rubygems/pull/4998)
+  - Update broken link in Bundler::Fetcher::CertificateFailureError [#4987](https://github.com/rubygems/rubygems/pull/4987)
+  - Give better errors for some permission issues [#4965](https://github.com/rubygems/rubygems/pull/4965)
+  - Print better errors when `bundler/gem_tasks` fail [#4872](https://github.com/rubygems/rubygems/pull/4872)
+  - Fix `bundle install` to reinstall deleted gems [#4974](https://github.com/rubygems/rubygems/pull/4974)
+  - Unify issue template and ISSUES.md document [#4980](https://github.com/rubygems/rubygems/pull/4980)
+  - Bump vendored connection_pool to 2.2.5 [#4738](https://github.com/rubygems/rubygems/pull/4738)
+
+## Bug fixes:
+
+  - Fix error message pointing to non existing file when using a global gem cache [#4999](https://github.com/rubygems/rubygems/pull/4999)
+  - Fix install crash when lockfile has missing dependencies for the current platform [#4941](https://github.com/rubygems/rubygems/pull/4941)
+  - Make `bundle info` show a proper warning every time it finds a deleted gem [#4971](https://github.com/rubygems/rubygems/pull/4971)
+
+# 2.2.29 (October 8, 2021)
+
+## Enhancements:
+
+  - Require at least Ruby 2.6.0 for gems created with recent rubies [#4920](https://github.com/rubygems/rubygems/pull/4920)
+  - Include glob information in string representation of git sources to make generated lockfiles deterministic [#4947](https://github.com/rubygems/rubygems/pull/4947)
+  - Add missing `rubygem_push` prerequisite [#4930](https://github.com/rubygems/rubygems/pull/4930)
+
+# 2.2.28 (September 23, 2021)
+
+## Enhancements:
+
+  - Use example.com in new gem template, since it will never have a potentially dangerous backing website [#4918](https://github.com/rubygems/rubygems/pull/4918)
+  - Deprecate `--install` flag to `bundle remove` and trigger install by default [#4891](https://github.com/rubygems/rubygems/pull/4891)
+
+# 2.2.27 (September 3, 2021)
+
+## Enhancements:
+
+  - Optimize some requires [#4887](https://github.com/rubygems/rubygems/pull/4887)
+  - Correctly redact credentials when using x-oauth-basic [#4866](https://github.com/rubygems/rubygems/pull/4866)
+
+## Bug fixes:
+
+  - Add missing key `branches:` to template for GitHub Actions [#4883](https://github.com/rubygems/rubygems/pull/4883)
+  - Fix `bundle plugin install` detection of already installed plugins [#4869](https://github.com/rubygems/rubygems/pull/4869)
+  - Make plugin installation idempotent [#4864](https://github.com/rubygems/rubygems/pull/4864)
+  - Fix `bundle check` showing duplicated gems when multiple platforms are locked [#4854](https://github.com/rubygems/rubygems/pull/4854)
+  - Fix `bundle check` incorrectly considering cached gems [#4853](https://github.com/rubygems/rubygems/pull/4853)
+
+# 2.2.26 (August 17, 2021)
+
+## Enhancements:
+
+  - Remove `RUBYGEMS_GEMDEPS` warning [#4827](https://github.com/rubygems/rubygems/pull/4827)
+  - Better defaults for GitHub Actions template generated by `bundle gem` [#4619](https://github.com/rubygems/rubygems/pull/4619)
+  - Make `bundle exec` keep file descriptors by default [#4812](https://github.com/rubygems/rubygems/pull/4812)
+  - Exclude gemspec file itself from file list of gems generated by `bundle gem` [#4650](https://github.com/rubygems/rubygems/pull/4650)
+  - Fix a couple small typos in deprecation / error messages [#4806](https://github.com/rubygems/rubygems/pull/4806)
+  - Make script generated by `bundle install --standalone` resilient to moving the application to a differently nested folder when `path` sources are used [#4792](https://github.com/rubygems/rubygems/pull/4792)
+  - Exclude CI files and issue templates from file list of gems generated by `bundle gem` [#4033](https://github.com/rubygems/rubygems/pull/4033)
+
+## Bug fixes:
+
+  - Respect `BUNDLE_USER_HOME` env when choosing config location [#4828](https://github.com/rubygems/rubygems/pull/4828)
+  - Fix `bundle gem` on path with spaces [#4816](https://github.com/rubygems/rubygems/pull/4816)
+  - Fix bundler hitting the network in some cases where not allowed [#4805](https://github.com/rubygems/rubygems/pull/4805)
+
 # 2.2.25 (July 30, 2021)
 
 ## Deprecations:
@@ -59,7 +185,7 @@
   - Fix `bundle doctor` crashing when finding a broken symlink [#4707](https://github.com/rubygems/rubygems/pull/4707)
   - Fix incorrect re-resolve edge case [#4700](https://github.com/rubygems/rubygems/pull/4700)
   - Fix some gems being unintentionally locked under multiple lockfile sections [#4701](https://github.com/rubygems/rubygems/pull/4701)
-  - Fix `--conservative` flag unexpectedly updating indirect dependencies [#4692](https://github.com/rubygems/rubygems/pull/4692)
+  - Fix `--conservative` flag unexpectedly updating indirect dependencies. NOTE: As part of this bug fix, some undocumented, unintentional code causing `bundle update --source <gem>` to update conservatively was fixed. Use the documented `bundle update --conservative <gem>` instead [#4692](https://github.com/rubygems/rubygems/pull/4692)
 
 # 2.2.21 (June 23, 2021)
 
