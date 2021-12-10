@@ -2376,6 +2376,7 @@ This release was sponsored by Ruby Central.
 
 * RubyGems can now be updated on Ruby implementations that do not support
   vendordir in RbConfig::CONFIG.  Issue #974 by net1957.
+* Added support for missing git_source method in the gem dependencies API.
 
 # 2.4.0 / 2014-07-16
 
