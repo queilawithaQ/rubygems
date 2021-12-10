@@ -79,7 +79,7 @@ module Spec
 
     def bundle(cmd, options = {}, &block)
       with_sudo = options.delete(:sudo)
-      sudo = with_sudo == :preserve_env ? "sudo -E --preserve-env=RUBYOPT" : "sudo" if with_sudo
+      sudo = with_sudo == :preserve_env ? ["sudo", "-E", "--preserve-env=RUBYOPT"] : ["sudo"] if with_sudo
 
       bundle_bin = options.delete(:bundle_bin)
       bundle_bin ||= installed_bindir.join("bundle")
@@ -112,17 +112,18 @@ module Spec
         when nil
           next
         when true
-          " --#{k}"
+          "--#{k}"
         when false
-          " --no-#{k}"
+          "--no-#{k}"
         else
-          " --#{k} #{v}"
+          "--#{k}=#{v}"
         end
-      end.join
+      end
 
       ruby_cmd = build_ruby_cmd({ :sudo => sudo, :load_path => load_path, :requires => requires })
-      cmd = "#{ruby_cmd} #{bundle_bin} #{cmd}#{args}"
-      sys_exec(cmd, { :env => env, :dir => dir, :raise_on_error => raise_on_error }, &block)
+      require "shellwords"
+      cmd = [*ruby_cmd, bundle_bin.to_s, *cmd.to_s.shellsplit, *args].compact
+      sys_exec(*cmd, { :env => env, :dir => dir, :raise_on_error => raise_on_error }, &block)
     end
 
     def bundler(cmd, options = {})
@@ -132,8 +133,7 @@ module Spec
 
     def ruby(ruby, options = {})
       ruby_cmd = build_ruby_cmd
-      escaped_ruby = ruby.shellescape
-      sys_exec(%(#{ruby_cmd} -w -e #{escaped_ruby}), options)
+      sys_exec(*ruby_cmd, "-w", "-e", ruby, options)
     end
 
     def load_error_ruby(ruby, name, opts = {})
@@ -156,7 +156,7 @@ module Spec
       requires << "#{Path.spec_dir}/support/hax.rb"
       require_option = requires.map {|r| "-r#{r}" }
 
-      [sudo, Gem.ruby, *lib_option, *require_option].compact.join(" ")
+      [*sudo, Gem.ruby, *lib_option, *require_option].compact
     end
 
     def gembin(cmd, options = {})
@@ -168,26 +168,34 @@ module Spec
       env = options[:env] || {}
       env["RUBYOPT"] = opt_add("-r#{spec_dir}/support/hax.rb", env["RUBYOPT"] || ENV["RUBYOPT"])
       options[:env] = env
-      sys_exec("#{Path.gem_bin} #{command}", options)
+      require "shellwords"
+      sys_exec(*Path.gem_bin.shellsplit, *command.to_s.shellsplit, options)
     end
 
-    def rake
-      "#{Gem.ruby} -S #{ENV["GEM_PATH"]}/bin/rake"
+    def rake(cmd, options = {})
+      require "shellwords"
+      sys_exec(Gem.ruby, "-S", "#{ENV["GEM_PATH"]}/bin/rake", *cmd.to_s.shellsplit, options)
     end
 
-    def git(cmd, path, options = {})
-      sys_exec("git #{cmd}", options.merge(:dir => path))
+    def git(cmd, options = {})
+      require "shellwords"
+      sys_exec("git", *cmd.to_s.shellsplit, options)
     end
 
-    def sys_exec(cmd, options = {})
+    def sys_exec(*cmd)
+      options = cmd.pop if cmd.last.is_a?(Hash)
+      options ||= {}
+
       env = options[:env] || {}
       env["RUBYOPT"] = opt_add("-r#{spec_dir}/support/switch_rubygems.rb", env["RUBYOPT"] || ENV["RUBYOPT"])
       dir = options[:dir] || bundled_app
-      command_execution = CommandExecution.new(cmd.to_s, dir)
+
+      require "shellwords"
+      cmd_for_display = cmd.shelljoin
+      command_execution = CommandExecution.new(cmd_for_display, dir)
 
       require "open3"
-      require "shellwords"
-      Open3.popen3(env, *cmd.shellsplit, :chdir => dir) do |stdin, stdout, stderr, wait_thr|
+      Open3.popen3(env, *cmd, :chdir => dir) do |stdin, stdout, stderr, wait_thr|
         yield stdin, stdout, wait_thr if block_given?
         stdin.close
 
@@ -207,7 +215,7 @@ module Spec
       unless options[:raise_on_error] == false || command_execution.success?
         raise <<~ERROR
 
-          Invoking `#{cmd}` failed with output:
+          Invoking `#{cmd_for_display}` failed with output:
           ----------------------------------------------------------------------
           #{command_execution.stdboth}
           ----------------------------------------------------------------------
@@ -489,7 +497,7 @@ module Spec
     end
 
     def revision_for(path)
-      sys_exec("git rev-parse HEAD", :dir => path).strip
+      git("rev-parse HEAD", :dir => path).strip
     end
 
     def with_read_only(pattern)
