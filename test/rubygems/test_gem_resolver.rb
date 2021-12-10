@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-require 'rubygems/test_case'
+require_relative 'helper'
 
 class TestGemResolver < Gem::TestCase
   def setup
@@ -10,6 +10,14 @@ class TestGemResolver < Gem::TestCase
 
   def make_dep(name, *req)
     Gem::Dependency.new(name, *req)
+  end
+
+  ##
+  # Gem::Resolver::SpecSpecification full_name does not include platform
+
+  def real_full_name(s)
+    s.platform == Gem::Platform::RUBY || Gem::Specification === s ?
+      s.full_name : "#{s.full_name}-#{s.platform}"
   end
 
   def set(*specs)
@@ -76,7 +84,7 @@ class TestGemResolver < Gem::TestCase
 
     assert_same index_set, composed
 
-    e = assert_raises ArgumentError do
+    e = assert_raise ArgumentError do
       @DR.compose_sets nil
     end
 
@@ -89,6 +97,36 @@ class TestGemResolver < Gem::TestCase
     composed = @DR.compose_sets index_set
 
     assert_same index_set, composed
+  end
+
+  def test_find_possible
+    local = Gem::Platform.local
+    a2           = util_spec 'a', 2
+    a2_ruby_plat = util_spec 'a', 2 do |s|
+      s.required_ruby_version = Gem::Requirement.new "< 2.5.0.a"
+      s.platform = local
+    end
+    a3_ruby = util_spec 'a', 3 do |s|
+      s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+    end
+    a3_ruby_plat = util_spec 'a', 3 do |s|
+      s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+      s.platform = local
+    end
+
+    util_set_RUBY_VERSION '2.5.0'
+
+    dep = make_dep 'a', '>= 1'
+
+    s = set(a2, a2_ruby_plat, a3_ruby, a3_ruby_plat)
+
+    res = Gem::Resolver.new([dep], s)
+
+    result, _ = res.find_possible dep
+
+    assert_equal %w[a-2], result.map { |spec| real_full_name spec }
+  ensure
+    util_restore_RUBY_VERSION
   end
 
   def test_requests
@@ -266,14 +304,14 @@ class TestGemResolver < Gem::TestCase
 
     res = Gem::Resolver.new [a_dep], Gem::Resolver::IndexSet.new
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       res.resolve
     end
 
     refute_empty e.errors
   end
 
-  def test_no_overlap_specificly
+  def test_no_overlap_specifically
     a = util_spec "a", '1'
     b = util_spec "b", "1"
 
@@ -445,7 +483,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad, bd], s)
 
-    e = assert_raises Gem::DependencyResolutionError do
+    e = assert_raise Gem::DependencyResolutionError do
       r.resolve
     end
 
@@ -469,7 +507,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad], set)
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       r.resolve
     end
 
@@ -486,7 +524,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad], set(a1))
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       r.resolve
     end
 
@@ -499,7 +537,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad], set(a1))
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       r.resolve
     end
 
@@ -516,7 +554,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad], set(a1))
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       r.resolve
     end
 
@@ -539,7 +577,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad, bd], s)
 
-    e = assert_raises Gem::DependencyResolutionError do
+    e = assert_raise Gem::DependencyResolutionError do
       r.resolve
     end
 
@@ -611,7 +649,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([d1, d2, d3], s)
 
-    assert_raises Gem::DependencyResolutionError do
+    assert_raise Gem::DependencyResolutionError do
       r.resolve
     end
   end
@@ -629,7 +667,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new [a_dep, b_dep], s
 
-    assert_raises Gem::DependencyResolutionError do
+    assert_raise Gem::DependencyResolutionError do
       r.resolve
     end
   end
@@ -749,9 +787,40 @@ class TestGemResolver < Gem::TestCase
       s.platform = 'unknown'
     end
 
-    selected = r.select_local_platforms [a1, a1_p1, a1_p2]
+    selected = Gem::Deprecate.skip_during do
+      r.select_local_platforms [a1, a1_p1, a1_p2]
+    end
 
     assert_equal [a1, a1_p1], selected
+  end
+
+  def test_select_local_platforms_ruby_version
+    local   = Gem::Platform.local
+    a2      = util_spec 'a', 2
+    a2_plat = util_spec 'a', 2 do |s|
+      s.platform = local
+    end
+    a3_ruby = util_spec 'a', 3 do |s|
+      s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+    end
+    a3_ruby_plat = util_spec 'a', 3 do |s|
+      s.required_ruby_version = Gem::Requirement.new ">= 2.6.0"
+      s.platform = local
+    end
+
+    util_set_RUBY_VERSION '2.5.0'
+
+    r = Gem::Resolver.new nil, nil
+
+    specs = [a2, a2_plat, a3_ruby, a3_ruby_plat]
+
+    selected = r.select_local_platforms_ruby_version specs
+
+    exp = ["a-2", "a-2-#{local}"]
+
+    assert_equal exp, selected.map { |s| real_full_name s }
+  ensure
+    util_restore_RUBY_VERSION
   end
 
   def test_search_for_local_platform_partial_string_match
@@ -781,7 +850,7 @@ class TestGemResolver < Gem::TestCase
 
     r = Gem::Resolver.new([ad], set(a1))
 
-    e = assert_raises Gem::UnsatisfiableDepedencyError do
+    e = assert_raise Gem::UnsatisfiableDependencyError do
       r.resolve
     end
 

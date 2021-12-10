@@ -50,6 +50,19 @@ RSpec.describe "bundle info" do
       expect(out).to eq(root.to_s)
     end
 
+    it "prints gem version if exists in bundle" do
+      bundle "info rails --version"
+      expect(out).to eq("2.3.2")
+    end
+
+    it "doesn't claim that bundler has been deleted, even if using a custom path without bundler there" do
+      bundle "config set --local path vendor/bundle"
+      bundle "install"
+      bundle "info bundler"
+      expect(out).to include("\tPath: #{root}")
+      expect(err).not_to match(/The gem bundler has been deleted/i)
+    end
+
     it "complains if gem not in bundle" do
       bundle "info missing", :raise_on_error => false
       expect(err).to eq("Could not find gem 'missing'.")
@@ -60,7 +73,15 @@ RSpec.describe "bundle info" do
 
       bundle "info rails --path"
 
-      expect(err).to match(/has been deleted/i)
+      expect(err).to match(/The gem rails has been deleted/i)
+      expect(err).to match(default_bundle_path("gems", "rails-2.3.2").to_s)
+
+      bundle "info rail --path"
+      expect(err).to match(/The gem rails has been deleted/i)
+      expect(err).to match(default_bundle_path("gems", "rails-2.3.2").to_s)
+
+      bundle "info rails"
+      expect(err).to match(/The gem rails has been deleted/i)
       expect(err).to match(default_bundle_path("gems", "rails-2.3.2").to_s)
     end
 
@@ -111,6 +132,7 @@ RSpec.describe "bundle info" do
 
     it "prints out git info" do
       install_gemfile <<-G
+        source "#{file_uri_for(gem_repo1)}"
         gem "foo", :git => "#{lib_path("foo-1.0")}"
       G
       expect(the_bundle).to include_gems "foo 1.0"
@@ -126,6 +148,7 @@ RSpec.describe "bundle info" do
       @revision = revision_for(lib_path("foo-1.0"))[0...6]
 
       install_gemfile <<-G
+        source "#{file_uri_for(gem_repo1)}"
         gem "foo", :git => "#{lib_path("foo-1.0")}", :branch => "omg"
       G
       expect(the_bundle).to include_gems "foo 1.0.omg"
@@ -137,6 +160,7 @@ RSpec.describe "bundle info" do
     it "doesn't print the branch when tied to a ref" do
       sha = revision_for(lib_path("foo-1.0"))
       install_gemfile <<-G
+        source "#{file_uri_for(gem_repo1)}"
         gem "foo", :git => "#{lib_path("foo-1.0")}", :ref => "#{sha}"
       G
 
@@ -147,6 +171,7 @@ RSpec.describe "bundle info" do
     it "handles when a version is a '-' prerelease" do
       @git = build_git("foo", "1.0.0-beta.1", :path => lib_path("foo"))
       install_gemfile <<-G
+        source "#{file_uri_for(gem_repo1)}"
         gem "foo", "1.0.0-beta.1", :git => "#{lib_path("foo")}"
       G
       expect(the_bundle).to include_gems "foo 1.0.0.pre.beta.1"
@@ -165,7 +190,7 @@ RSpec.describe "bundle info" do
       G
 
       bundle "info rac"
-      expect(out).to eq "1 : rack\n2 : rack-obama\n0 : - exit -\n>"
+      expect(out).to match(/\A1 : rack\n2 : rack-obama\n0 : - exit -(\n>)?\z/)
     end
   end
 
@@ -180,6 +205,20 @@ RSpec.describe "bundle info" do
 
       bundle "info #{invalid_regexp}", :raise_on_error => false
       expect(err).to include("Could not find gem '#{invalid_regexp}'.")
+    end
+  end
+
+  context "with without configured" do
+    it "does not find the gem, but gives a helpful error" do
+      bundle "config without test"
+
+      install_gemfile <<-G
+        source "#{file_uri_for(gem_repo1)}"
+        gem "rails", group: :test
+      G
+
+      bundle "info rails", :raise_on_error => false
+      expect(err).to include("Could not find gem 'rails', because it's in the group 'test', configured to be ignored.")
     end
   end
 end

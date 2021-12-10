@@ -9,7 +9,7 @@ module Bundler
     end
 
     def run
-      Bundler.ui.level = "error" if options[:quiet]
+      Bundler.ui.level = "warn" if options[:quiet]
 
       Plugin.gemfile_install(Bundler.default_gemfile) if Bundler.feature_flag.plugins?
 
@@ -27,9 +27,14 @@ module Bundler
         raise InvalidOption, "Cannot specify --all along with specific options."
       end
 
+      conservative = options[:conservative]
+
       if full_update
-        # We're doing a full update
-        Bundler.definition(true)
+        if conservative
+          Bundler.definition(:conservative => conservative)
+        else
+          Bundler.definition(true)
+        end
       else
         unless Bundler.default_lockfile.exist?
           raise GemfileLockNotFound, "This Bundle hasn't been installed yet. " \
@@ -43,7 +48,7 @@ module Bundler
         end
 
         Bundler.definition(:gems => gems, :sources => sources, :ruby => options[:ruby],
-                           :lock_shared_dependencies => options[:conservative],
+                           :conservative => conservative,
                            :bundler => options[:bundler])
       end
 
@@ -61,7 +66,7 @@ module Bundler
 
       if locked_gems = Bundler.definition.locked_gems
         previous_locked_info = locked_gems.specs.reduce({}) do |h, s|
-          h[s.name] = { :spec => s, :version => s.version, :source => s.source.to_s }
+          h[s.name] = { :spec => s, :version => s.version, :source => s.source.identifier }
           h
         end
       end
@@ -90,7 +95,7 @@ module Bundler
           end
 
           locked_source = locked_info[:source]
-          new_source = new_spec.source.to_s
+          new_source = new_spec.source.identifier
           next if locked_source != new_source
 
           new_version = new_spec.version

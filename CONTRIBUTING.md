@@ -13,7 +13,6 @@ contributors to follow to reduce the time it takes to get changes merged in.
     *   Match indentation (two spaces)
     *   Match coding style (run `rake rubocop`)
 
-
 3.  If any new files are added or existing files removed in a commit or PR,
     please update the `Manifest.txt` accordingly. This can be done by running
     `rake update_manifest`
@@ -30,20 +29,51 @@ here: https://guides.rubygems.org/contributing/
 
 ## Getting Started
 
-    $ rake setup
-    $ rake test
+    rake setup
 
-> Optional you can configure git hooks with: rake git_hooks
+> Optionally you can configure git hooks with: rake git_hooks
 
 To run commands like `gem install` from the repo:
 
-    $ ruby -Ilib bin/gem install
+    ruby -Ilib bin/gem install
 
-To run bundler test:
+To run commands like `bundle install` from the repo:
 
-    $ cd bundler
-    $ bin/rake spec:deps
-    $ bin/rspec spec
+    ruby bundler/spec/support/bundle.rb install
+
+### Running Tests
+
+To run the entire test suite you can use: 
+
+    rake test
+
+To run an individual test file located for example in `test/rubygems/test_deprecate.rb` you can use: 
+
+    ruby -Ilib:test:bundler/lib test/rubygems/test_deprecate.rb
+    
+And to run an individual test method named `test_default` within a test file, you can use: 
+
+    ruby -Ilib:test:bundler/lib test/rubygems/test_deprecate.rb -n /test_default/
+
+### Running bundler tests
+
+Everything needs to be run from the `bundler/` subfolder.
+
+To setup bundler tests:
+
+    bin/rake spec:parallel_deps
+
+To run the entire bundler test suite in parallel (it takes a while):
+
+    bin/parallel_rspec
+
+To run the entire bundler test suite sequentially (get a coffee because it's very slow):
+
+    bin/rspec
+
+To run an individual test file location for example in `spec/install/gems/standalone_spec.rb` you can use:
+
+    bin/rspec spec/install/gems/standalone_spec.rb
 
 ## Issues
 
@@ -108,13 +138,13 @@ where it is in the process from being submitted to being closed.  These are
 listed in rough  progression order from submitted to closed.
 
 *   **triage** - This is an issue or pull request that needs to be properly
-    labeled by by a maintainer.
+    labeled by a maintainer.
 *   **confirmed** - This issue/pull request has been accepted as valid, but is
     not yet immediately ready for work.
 *   **ready** - An issue that is available for collaboration. This issue
     should have existing discussion on the problem, and a description of how
     to go about solving it.
-*   **working** - An issue that has a specific invidual assigned to and
+*   **working** - An issue that has a specific individual assigned to and
     planning to do work on it.
 *   **user feedback required** - The issue/pull request is blocked pending
     more feedback from an end user
@@ -132,7 +162,7 @@ closed reason labels are maroon `closed: *`.
 
 *   **duplicate** - This is a duplicate of an existing bug. The comments must
     reference the existing issue.
-*   **abandonded** - This is an issue/pull request that has aged off, is no
+*   **abandoned** - This is an issue/pull request that has aged off, is no
     longer applicable or similar.
 *   **declined** - An issue that won't be fixed/implemented or a pull request
     that is not accepted.

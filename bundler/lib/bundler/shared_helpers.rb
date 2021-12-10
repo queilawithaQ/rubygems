@@ -145,13 +145,6 @@ module Bundler
       Bundler.ui.warn message
     end
 
-    def trap(signal, override = false, &block)
-      prior = Signal.trap(signal) do
-        block.call
-        prior.call unless override
-      end
-    end
-
     def ensure_same_dependencies(spec, old_deps, new_deps)
       new_deps = new_deps.reject {|d| d.type == :development }
       old_deps = old_deps.reject {|d| d.type == :development }
@@ -187,11 +180,11 @@ module Bundler
       return @md5_available if defined?(@md5_available)
       @md5_available = begin
         require "openssl"
-        OpenSSL::Digest.digest("MD5", "")
+        ::OpenSSL::Digest.digest("MD5", "")
         true
       rescue LoadError
         true
-      rescue OpenSSL::Digest::DigestError
+      rescue ::OpenSSL::Digest::DigestError
         false
       end
     end
@@ -320,12 +313,11 @@ module Bundler
     end
 
     def clean_load_path
-      bundler_lib = bundler_ruby_lib
-
       loaded_gem_paths = Bundler.rubygems.loaded_gem_paths
 
       $LOAD_PATH.reject! do |p|
-        next if resolve_path(p).start_with?(bundler_lib)
+        resolved_path = resolve_path(p)
+        next if $LOADED_FEATURES.any? {|lf| lf.start_with?(resolved_path) }
         loaded_gem_paths.delete(p)
       end
       $LOAD_PATH.uniq!

@@ -14,6 +14,7 @@ module Bundler
     COMMAND_ALIASES = {
       "check" => "c",
       "install" => "i",
+      "plugin" => "",
       "list" => "ls",
       "exec" => ["e", "ex", "exe"],
       "cache" => ["package", "pack"],
@@ -72,14 +73,6 @@ module Bundler
       Bundler.ui = UI::Shell.new(options)
       Bundler.ui.level = "debug" if options["verbose"]
       unprinted_warnings.each {|w| Bundler.ui.warn(w) }
-
-      if ENV["RUBYGEMS_GEMDEPS"] && !ENV["RUBYGEMS_GEMDEPS"].empty?
-        Bundler.ui.warn(
-          "The RUBYGEMS_GEMDEPS environment variable is set. This enables RubyGems' " \
-          "experimental Gemfile mode, which may conflict with Bundler and cause unexpected errors. " \
-          "To remove this warning, unset RUBYGEMS_GEMDEPS.", :wrap => true
-        )
-      end
     end
 
     check_unknown_options!(:except => [:config, :exec])
@@ -122,9 +115,7 @@ module Bundler
       else command = "bundle-#{cli}"
       end
 
-      man_path = File.expand_path("../../../man", __FILE__)
-      # man files are located under ruby's mandir with the default gems of bundler
-      man_path = RbConfig::CONFIG["mandir"] unless File.directory?(man_path)
+      man_path = File.expand_path("man", __dir__)
       man_pages = Hash[Dir.glob(File.join(man_path, "**", "*")).grep(/.*\.\d*\Z/).collect do |f|
         [File.basename(f, ".*"), f]
       end]
@@ -134,8 +125,7 @@ module Bundler
         if Bundler.which("man") && man_path !~ %r{^file:/.+!/META-INF/jruby.home/.+}
           Kernel.exec "man #{man_page}"
         else
-          fallback_man_path = File.expand_path("../man", __FILE__)
-          puts File.read("#{fallback_man_path}/#{File.basename(man_page)}.ronn")
+          puts File.read("#{man_path}/#{File.basename(man_page)}.ronn")
         end
       elsif command_path = Bundler.which("bundler-#{cli}")
         Kernel.exec(command_path, "--help")
@@ -194,6 +184,7 @@ module Bundler
     method_option "install", :type => :boolean, :banner =>
       "Runs 'bundle install' after removing the gems from the Gemfile"
     def remove(*gems)
+      SharedHelpers.major_deprecation(2, "The `--install` flag has been deprecated. `bundle install` is triggered by default.") if ARGV.include?("--install")
       require_relative "cli/remove"
       Remove.new(gems, options).run
     end
@@ -311,39 +302,19 @@ module Bundler
       end
     end
 
-    unless Bundler.feature_flag.bundler_3_mode?
-      desc "show GEM [OPTIONS]", "Shows all gems that are part of the bundle, or the path to a given gem"
-      long_desc <<-D
-        Show lists the names and versions of all gems that are required by your Gemfile.
-        Calling show with [GEM] will list the exact location of that gem on your machine.
-      D
-      method_option "paths", :type => :boolean,
-                             :banner => "List the paths of all gems that are required by your Gemfile."
-      method_option "outdated", :type => :boolean,
-                                :banner => "Show verbose output including whether gems are outdated."
-      def show(gem_name = nil)
-        if ARGV[0] == "show"
-          rest = ARGV[1..-1]
-
-          if flag = rest.find{|arg| ["--verbose", "--outdated"].include?(arg) }
-            Bundler::SharedHelpers.major_deprecation(2, "the `#{flag}` flag to `bundle show` was undocumented and will be removed without replacement")
-          else
-            new_command = rest.find {|arg| !arg.start_with?("--") } ? "info" : "list"
-
-            new_arguments = rest.map do |arg|
-              next arg if arg != "--paths"
-              next "--path" if new_command == "info"
-            end
-
-            old_argv = ARGV.join(" ")
-            new_argv = [new_command, *new_arguments.compact].join(" ")
-
-            Bundler::SharedHelpers.major_deprecation(2, "use `bundle #{new_argv}` instead of `bundle #{old_argv}`")
-          end
-        end
-        require_relative "cli/show"
-        Show.new(options, gem_name).run
-      end
+    desc "show GEM [OPTIONS]", "Shows all gems that are part of the bundle, or the path to a given gem"
+    long_desc <<-D
+      Show lists the names and versions of all gems that are required by your Gemfile.
+      Calling show with [GEM] will list the exact location of that gem on your machine.
+    D
+    method_option "paths", :type => :boolean,
+                           :banner => "List the paths of all gems that are required by your Gemfile."
+    method_option "outdated", :type => :boolean,
+                              :banner => "Show verbose output including whether gems are outdated."
+    def show(gem_name = nil)
+      SharedHelpers.major_deprecation(2, "the `--outdated` flag to `bundle show` was undocumented and will be removed without replacement") if ARGV.include?("--outdated")
+      require_relative "cli/show"
+      Show.new(options, gem_name).run
     end
 
     desc "list", "List all gems in the bundle"
@@ -360,6 +331,7 @@ module Bundler
 
     desc "info GEM [OPTIONS]", "Show information for the given gem"
     method_option "path", :type => :boolean, :banner => "Print full path to gem"
+    method_option "version", :type => :boolean, :banner => "Print gem version"
     def info(gem_name)
       require_relative "cli/info"
       Info.new(options, gem_name).run
@@ -395,6 +367,7 @@ module Bundler
     method_option "version", :aliases => "-v", :type => :string
     method_option "group", :aliases => "-g", :type => :string
     method_option "source", :aliases => "-s", :type => :string
+    method_option "require", :aliases => "-r", :type => :string, :banner => "Adds require path to gem. Provide false, or a path as a string."
     method_option "git", :type => :string
     method_option "branch", :type => :string
     method_option "skip-install", :type => :boolean, :banner =>
@@ -478,6 +451,12 @@ module Bundler
         "do in future versions. Instead please use `bundle config set cache_all true`, " \
         "and stop using this flag" if ARGV.include?("--all")
 
+      SharedHelpers.major_deprecation 2,
+        "The `--path` flag is deprecated because its semantics are unclear. " \
+        "Use `bundle config cache_path` to configure the path of your cache of gems, " \
+        "and `bundle config path` to configure the path where your gems are installed, " \
+        "and stop using this flag" if ARGV.include?("--path")
+
       require_relative "cli/cache"
       Cache.new(options).run
     end
@@ -485,7 +464,7 @@ module Bundler
     map aliases_for("cache")
 
     desc "exec [OPTIONS]", "Run the command in context of the bundle"
-    method_option :keep_file_descriptors, :type => :boolean, :default => false
+    method_option :keep_file_descriptors, :type => :boolean, :default => true
     method_option :gemfile, :type => :string, :required => false
     long_desc <<-D
       Exec runs a command, providing it access to the gems in the bundle. While using
@@ -493,6 +472,10 @@ module Bundler
       into the system wide RubyGems repository.
     D
     def exec(*args)
+      if ARGV.include?("--no-keep-file-descriptors")
+        SharedHelpers.major_deprecation(2, "The `--no-keep-file-descriptors` has been deprecated. `bundle exec` no longer mess with your file descriptors. Close them in the exec'd script if you need to")
+      end
+
       require_relative "cli/exec"
       Exec.new(options, args).run
     end
@@ -507,8 +490,8 @@ module Bundler
       By default, setting a configuration value sets it for all projects
       on the machine.
 
-      If a global setting is superceded by local configuration, this command
-      will show the current value, as well as any superceded values and
+      If a global setting is superseded by local configuration, this command
+      will show the current value, as well as any superseded values and
       where they were specified.
     D
     require_relative "cli/config"
@@ -571,7 +554,7 @@ module Bundler
       method_option :version, :type => :boolean, :default => false, :aliases => "-v", :desc => "Set to show each gem version."
       method_option :without, :type => :array, :default => [], :aliases => "-W", :banner => "GROUP[ GROUP...]", :desc => "Exclude gems that are part of the specified named group."
       def viz
-        SharedHelpers.major_deprecation 2, "The `viz` command has been moved to the `bundle-viz` gem, see https://github.com/bundler/bundler-viz"
+        SharedHelpers.major_deprecation 2, "The `viz` command has been renamed to `graph` and moved to a plugin. See https://github.com/rubygems/bundler-graph"
         require_relative "cli/viz"
         Viz.new(options.dup).run
       end
@@ -589,10 +572,14 @@ module Bundler
     method_option :git, :type => :boolean, :default => true, :desc => "Initialize a git repo inside your library."
     method_option :mit, :type => :boolean, :desc => "Generate an MIT license file. Set a default with `bundle config set --global gem.mit true`."
     method_option :rubocop, :type => :boolean, :desc => "Add rubocop to the generated Rakefile and gemspec. Set a default with `bundle config set --global gem.rubocop true`."
+    method_option :changelog, :type => :boolean, :desc => "Generate changelog file. Set a default with `bundle config set --global gem.changelog true`."
     method_option :test, :type => :string, :lazy_default => Bundler.settings["gem.test"] || "", :aliases => "-t", :banner => "Use the specified test framework for your library",
                          :desc => "Generate a test directory for your library, either rspec, minitest or test-unit. Set a default with `bundle config set --global gem.test (rspec|minitest|test-unit)`."
     method_option :ci, :type => :string, :lazy_default => Bundler.settings["gem.ci"] || "",
                        :desc => "Generate CI configuration, either GitHub Actions, Travis CI, GitLab CI or CircleCI. Set a default with `bundle config set --global gem.ci (github|travis|gitlab|circle)`"
+    method_option :linter, :type => :string, :lazy_default => Bundler.settings["gem.linter"] || "",
+                           :desc => "Add a linter and code formatter, either RuboCop or Standard. Set a default with `bundle config set --global gem.linter (rubocop|standard)`"
+    method_option :github_username, :type => :string, :default => Bundler.settings["gem.github_username"], :banner => "Set your username on GitHub", :desc => "Fill in GitHub username on README so that you don't have to do it manually. Set a default with `bundle config set --global gem.github_username <your_username>`."
 
     def gem(name)
     end

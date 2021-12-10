@@ -24,12 +24,6 @@ class RubygemsVersionManager
 
   def assert_system_features_not_loaded!
     at_exit do
-      errors = if $?.nil?
-        ""
-      else
-        all_commands_output
-      end
-
       rubylibdir = RbConfig::CONFIG["rubylibdir"]
 
       rubygems_path = rubylibdir + "/rubygems"
@@ -43,11 +37,11 @@ class RubygemsVersionManager
           (loaded_feature.start_with?(bundler_path) && !bundler_exemptions.any? {|bundler_exemption| loaded_feature.start_with?(bundler_exemption) })
       end
 
-      if bad_loaded_features.any?
-        errors += "the following features were incorrectly loaded:\n#{bad_loaded_features.join("\n")}"
+      errors = if bad_loaded_features.any?
+        all_commands_output + "the following features were incorrectly loaded:\n#{bad_loaded_features.join("\n")}"
       end
 
-      raise errors unless errors.empty?
+      raise errors if errors
     end
   end
 
@@ -72,12 +66,13 @@ class RubygemsVersionManager
   def switch_local_copy_if_needed
     return unless local_copy_switch_needed?
 
-    sys_exec("git checkout #{target_tag}", :dir => local_copy_path)
+    git("checkout #{target_tag}", :dir => local_copy_path)
 
     ENV["RGV"] = local_copy_path.to_s
   end
 
   def rubygems_unrequire_needed?
+    require "rubygems"
     !$LOADED_FEATURES.include?(local_copy_path.join("lib/rubygems.rb").to_s)
   end
 
@@ -90,7 +85,7 @@ class RubygemsVersionManager
   end
 
   def local_copy_tag
-    sys_exec("git rev-parse --abbrev-ref HEAD", :dir => local_copy_path)
+    git("rev-parse --abbrev-ref HEAD", :dir => local_copy_path)
   end
 
   def local_copy_path
@@ -103,7 +98,7 @@ class RubygemsVersionManager
     rubygems_path = source_root.join("tmp/rubygems")
 
     unless rubygems_path.directory?
-      sys_exec("git clone .. #{rubygems_path}", :dir => source_root)
+      git("clone .. #{rubygems_path}", :dir => source_root)
     end
 
     rubygems_path

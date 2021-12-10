@@ -144,7 +144,8 @@ RSpec.describe "bundle show", :bundler => "< 3" do
     before :each do
       build_git "foo", :path => lib_path("foo")
       File.open(lib_path("foo/Gemfile"), "w") {|f| f.puts "gemspec" }
-      sys_exec "rm -rf .git && git init", :dir => lib_path("foo")
+      sys_exec "rm -rf .git", :dir => lib_path("foo")
+      git "init", :dir => lib_path("foo")
     end
 
     it "does not output git errors" do
@@ -173,7 +174,7 @@ RSpec.describe "bundle show", :bundler => "< 3" do
       G
 
       bundle "show rac"
-      expect(out).to eq "1 : rack\n2 : rack-obama\n0 : - exit -\n>"
+      expect(out).to match(/\A1 : rack\n2 : rack-obama\n0 : - exit -(\n>)?\z/)
     end
   end
 

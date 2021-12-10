@@ -60,7 +60,7 @@ namespace :spec do
     raise "Couldn't read sudoers file: #{output}" unless status.success?
 
     begin
-      output, status = Open3.capture2e("sudo sed -i '/secure_path/d' /etc/sudoers")
+      output, status = Open3.capture2e("sudo", "sh", "-c", "sed -e'/secure_path/d' /etc/sudoers > /etc/sudoers.bak && mv /etc/sudoers.bak /etc/sudoers")
       raise "Couldn't configure sudo to preserve path: #{output}" unless status.success?
 
       raise "Couldn't configure sudo correctly to preserve path" unless `ruby -v` == `sudo -E ruby -v`
@@ -85,13 +85,10 @@ namespace :man do
   if RUBY_ENGINE == "jruby"
     task(:build) {}
   else
-    directory "man"
+    index = Dir["lib/bundler/man/*.ronn"].map do |ronn|
+      roff = "#{File.dirname(ronn)}/#{File.basename(ronn, ".ronn")}"
 
-    index = Dir["lib/bundler/man/*.ronn"].map do |source|
-      ronn = "lib/bundler/man/#{File.basename(source)}"
-      roff = "man/#{File.basename(source, ".ronn")}"
-
-      file roff => ["man", ronn] do
+      file roff => ronn do
         date = ENV["MAN_PAGES_DATE"] || Time.now.strftime("%Y-%m-%d")
         sh "bin/ronn --warnings --roff --pipe --date #{date} #{ronn} > #{roff}"
       end
@@ -107,7 +104,7 @@ namespace :man do
       end
       index = index.sort_by(&:first)
       justification = index.map {|(n, _f)| n.length }.max + 4
-      File.open("man/index.txt", "w") do |f|
+      File.open("lib/bundler/man/index.txt", "w") do |f|
         index.each do |name, filename|
           f << name.ljust(justification) << filename << "\n"
         end
@@ -126,7 +123,7 @@ namespace :man do
 
     desc "Remove all built man pages"
     task :clean do
-      leftovers = Dir["man/*"].reject do |f|
+      leftovers = Dir["lib/bundler/man/*"].reject do |f|
         File.extname(f) == ".ronn"
       end
       rm leftovers if leftovers.any?
@@ -138,7 +135,7 @@ namespace :man do
     desc "Sets target date for building man pages to the one currently present"
     task :set_current_date do
       require "date"
-      ENV["MAN_PAGES_DATE"] = Date.parse(File.readlines("man/bundle-add.1")[3].split('"')[5]).strftime("%Y-%m-%d")
+      ENV["MAN_PAGES_DATE"] = Date.parse(File.readlines("lib/bundler/man/bundle-add.1")[3].split('"')[5]).strftime("%Y-%m-%d")
     end
 
     desc "Verify man pages are in sync"
@@ -151,28 +148,41 @@ namespace :man do
   end
 end
 
-load "task/automatiek.rake"
+load "../util/automatiek.rake"
 
+# We currently ship Molinillo master branch as of
+# https://github.com/CocoaPods/Molinillo/commit/7cc27a355e861bdf593e2cde7bf1bca3daae4303
 desc "Vendor a specific version of molinillo"
 Automatiek::RakeTask.new("molinillo") do |lib|
-  lib.version = "0.7.0"
+  lib.version = "master"
   lib.download = { :github => "https://github.com/CocoaPods/Molinillo" }
   lib.namespace = "Molinillo"
   lib.prefix = "Bundler"
   lib.vendor_lib = "lib/bundler/vendor/molinillo"
+  lib.license_path = "LICENSE"
+
+  lib.dependency("tsort") do |sublib|
+    sublib.version = "master"
+    sublib.download = { :github => "https://github.com/ruby/tsort" }
+    sublib.namespace = "TSort"
+    sublib.prefix = "Bundler"
+    sublib.vendor_lib = "lib/bundler/vendor/tsort"
+    sublib.license_path = "LICENSE.txt"
+  end
 end
 
 desc "Vendor a specific version of thor"
 Automatiek::RakeTask.new("thor") do |lib|
-  lib.version = "v1.0.1"
+  lib.version = "v1.1.0"
   lib.download = { :github => "https://github.com/erikhuda/thor" }
   lib.namespace = "Thor"
   lib.prefix = "Bundler"
   lib.vendor_lib = "lib/bundler/vendor/thor"
+  lib.license_path = "LICENSE.md"
 end
 
 # We currently include the official version as of
-# https://github.com/ruby/tmpdir/tree/a3e06bd49829dc49c346aa10f8b91116fd7e17ad,
+# https://github.com/ruby/tmpdir/commit/c79bc7adf66a39617d0d6bae21085adc77c02b0e
 # with the following changes on top:
 # * require fileutils relatively to use our vendored version.
 # * Inherit from `Dir` so that code assuming we're inside the
@@ -187,6 +197,7 @@ Automatiek::RakeTask.new("tmpdir") do |lib|
   lib.namespace = "Dir"
   lib.prefix = "Bundler"
   lib.vendor_lib = "lib/bundler/vendor/tmpdir"
+  lib.license_path = nil # There is no license file in the Repo
 
   lib.dependency("fileutils") do |sublib|
     sublib.version = "v1.4.1"
@@ -194,6 +205,7 @@ Automatiek::RakeTask.new("tmpdir") do |lib|
     sublib.namespace = "FileUtils"
     sublib.prefix = "Bundler"
     sublib.vendor_lib = "lib/bundler/vendor/fileutils"
+    sublib.license_path = "LICENSE.txt"
   end
 end
 
@@ -208,23 +220,26 @@ Automatiek::RakeTask.new("net-http-persistent") do |lib|
   lib.namespace = "Net::HTTP::Persistent"
   lib.prefix = "Bundler::Persistent"
   lib.vendor_lib = "lib/bundler/vendor/net-http-persistent"
+  lib.license_path = "README.rdoc"
 
+  # We currently include the official version as of
+  # https://github.com/mperham/connection_pool/commit/813c271e41be0714334834d6517ce68ca1357fc0.
   lib.dependency("connection_pool") do |sublib|
-    sublib.version = "v2.2.2"
+    sublib.version = "master"
     sublib.download = { :github => "https://github.com/mperham/connection_pool" }
     sublib.namespace = "ConnectionPool"
     sublib.prefix = "Bundler"
     sublib.vendor_lib = "lib/bundler/vendor/connection_pool"
+    sublib.license_path = "LICENSE"
   end
 
-  # We currently include changes over the official version to require internal paths
-  # relatively.
   lib.dependency("uri") do |sublib|
-    sublib.version = "v0.10.0"
+    sublib.version = "v0.10.1"
     sublib.download = { :github => "https://github.com/ruby/uri" }
     sublib.namespace = "URI"
     sublib.prefix = "Bundler"
     sublib.vendor_lib = "lib/bundler/vendor/uri"
+    sublib.license_path = "LICENSE.txt"
   end
 end
 

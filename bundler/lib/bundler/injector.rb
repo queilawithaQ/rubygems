@@ -113,8 +113,9 @@ module Bundler
         source = ", :source => \"#{d.source}\"" unless d.source.nil?
         git = ", :git => \"#{d.git}\"" unless d.git.nil?
         branch = ", :branch => \"#{d.branch}\"" unless d.branch.nil?
+        require_path = ", :require => #{convert_autorequire(d.autorequire)}" unless d.autorequire.nil?
 
-        %(gem #{name}#{requirement}#{group}#{source}#{git}#{branch})
+        %(gem #{name}#{requirement}#{group}#{source}#{git}#{branch}#{require_path})
       end.join("\n")
     end
 
@@ -128,7 +129,7 @@ module Bundler
     # evaluates a gemfile to remove the specified gem
     # from it.
     def remove_deps(gemfile_path)
-      initial_gemfile = IO.readlines(gemfile_path)
+      initial_gemfile = File.readlines(gemfile_path)
 
       Bundler.ui.info "Removing gems from #{gemfile_path}"
 
@@ -181,7 +182,7 @@ module Bundler
       patterns = /gem\s+(['"])#{Regexp.union(gems)}\1|gem\s*\((['"])#{Regexp.union(gems)}\2\)/
       new_gemfile = []
       multiline_removal = false
-      IO.readlines(gemfile_path).each do |line|
+      File.readlines(gemfile_path).each do |line|
         match_data = line.match(patterns)
         if match_data && is_not_within_comment?(line, match_data)
           multiline_removal = line.rstrip.end_with?(",")
@@ -268,6 +269,12 @@ module Bundler
 
     def show_warning(message)
       Bundler.ui.info Bundler.ui.add_color(message, :yellow)
+    end
+
+    def convert_autorequire(autorequire)
+      autorequire = autorequire.first
+      return autorequire if autorequire == "false"
+      autorequire.inspect
     end
   end
 end

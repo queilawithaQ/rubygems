@@ -5,13 +5,17 @@ on:
 
   push:
     branches:
-      - master
+      - run_subprocesses_without_shell
       - 3.2
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
 
 jobs:
   jruby_bundler:
     name: Bundler (JRuby)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     env:
       RGV: ..
@@ -21,7 +25,7 @@ jobs:
       - name: Setup ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: jruby-9.2.14.0
+          ruby-version: jruby-9.3.1.0
           bundler: none
       - name: Prepare dependencies
         run: |
